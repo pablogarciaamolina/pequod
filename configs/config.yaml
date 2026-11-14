@@ -30,3 +30,6 @@ agents:
 hydra:
   run:
     dir: runs/${now:%Y-%m-%d_%H-%M-%S}
+  job_logging:
+    handlers:
+      file: {encoding: utf-8}   # messages can hold any character

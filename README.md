@@ -56,6 +56,25 @@ when `run.max_iterations` is reached, or when you press `q`. The log of a run is
 
 Sent messages and replies are stored in `runs/mock_hub.db` (config key `mock_hub`). `channels=live` is not available yet.
 
+### Explain a run
+
+Every run writes its record into its own folder, `runs/<start time>/`:
+
+| File | Content |
+|---|---|
+| `trace.jsonl` | one line per wave: the paths, what was sent, the replies absorbed, the stop signal, the decision |
+| `graph_0.json`, `graph_1.json`, ... | the knowledge graph over time. `graph_0` is the start; `graph_<n>` is the graph after the replies of wave n were absorbed. Wave n was planned from `graph_<n-1>`. |
+| `report.md` | the final report for the supervisor, with the stop reason on the first line |
+| `main.log`, `.hydra/` | the log and the full config of the run (written by Hydra) |
+
+Print one card per wave, then the report:
+
+```
+uv run pequod explain runs/2026-11-14_19-10-00
+```
+
+This also works while the run is still in progress.
+
 ## Test
 
 ```
