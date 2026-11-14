@@ -65,3 +65,7 @@ def test_channel_rules_validate(mode):
 def test_channel_rules_are_the_same_in_mock_and_live():
     mock, live = load().channels, load(["channels=live"]).channels
     assert {k: v.rules for k, v in mock.items()} == {k: v.rules for k, v in live.items()}
+
+
+def test_config_has_mock_hub():
+    assert load().mock_hub.endswith("mock_hub.db")

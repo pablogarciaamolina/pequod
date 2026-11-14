@@ -77,3 +77,23 @@ def test_catalog_payload_of_another_channel_is_rejected_then_fixed(graph, catalo
     form = call("Interaction", **interaction("sms"), payload={"url": "https://forms.example/intake"})
     _, out = run(graph, catalog, rules, form, answer("sms"))
     assert out.payload is None
+
+
+def test_body_over_max_length_is_rejected_then_fixed(graph, catalog, rules):
+    long = call("Interaction", **interaction("sms", "x" * 161))
+    model, out = run(graph, catalog, rules, long, answer("sms"))
+    assert len(out.body) <= 160
+    error = model.seen[1][-1].content
+    assert "161" in error and "160" in error
+
+
+def test_subject_on_a_channel_without_subject_is_rejected_then_fixed(graph, catalog, rules):
+    with_subject = call("Interaction", **interaction("sms"), subject="Reports")
+    model, out = run(graph, catalog, rules, with_subject, answer("sms"))
+    assert out.subject is None
+    assert "subject" in model.seen[1][-1].content
+
+
+def test_subject_on_email_is_accepted(graph, catalog, rules):
+    _, out = run(graph, catalog, rules, call("Interaction", **interaction("email"), subject="Reports"))
+    assert out.subject == "Reports"

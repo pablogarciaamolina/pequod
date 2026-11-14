@@ -62,9 +62,27 @@ def test_invalid_output_is_returned_to_the_model_then_fixed(pings):
     assert model.seen[1][-1].content.startswith("Error")
 
 
-def test_plain_text_answer_raises_agent_error(pings):
-    with pytest.raises(AgentError, match="tester: no valid StopSignal after 1 model calls.*just text"):
-        agent(fake(AIMessage(content="just text")), pings).invoke("go")
+def test_plain_text_answer_gets_a_reminder_then_the_tool_call_is_accepted(pings):
+    model = fake(AIMessage(content="The client opted out."), STOP)
+    out = agent(model, pings).invoke("go")
+    assert out.opt_out is True
+    reminder = model.seen[1][-1]
+    assert reminder.type == "human" and "StopSignal" in reminder.content
+    assert model.seen[1][-2].content == "The client opted out."  # the model still sees its own text
+
+
+def test_only_plain_text_raises_agent_error_at_the_limit(pings):
+    model = fake(*[AIMessage(content="just text") for _ in range(5)])  # separate objects: separate message ids
+    with pytest.raises(AgentError, match="tester: no valid StopSignal after 3 model calls.*limit 3.*just text"):
+        agent(model, pings, max_steps=3).invoke("go")
+    assert len(model.seen) == 3  # the reminder does not buy extra model calls
+
+
+def test_reminder_and_tool_calls_share_the_step_limit(pings):
+    model = fake(call("ping"), AIMessage(content="text"), call("ping"), STOP)
+    with pytest.raises(AgentError, match="after 3 model calls"):
+        agent(model, pings, max_steps=3).invoke("go")
+    assert len(model.seen) == 3
 
 
 def test_step_limit_raises_agent_error(pings):
@@ -92,3 +110,12 @@ def test_check_rejects_an_output_then_accepts_the_fix(pings):
 def test_checked_type_keeps_name_and_description():
     assert checked(Interaction, no_sms).__name__ == "Interaction"
     assert checked(Interaction, no_sms).__doc__ == Interaction.__doc__
+
+
+def test_provider_error_becomes_an_agent_error_naming_the_agent(pings):
+    class Broken(type(fake())):
+        def _generate(self, *args, **kwargs):
+            raise ConnectionError("no route to host")
+
+    with pytest.raises(AgentError, match="tester: ConnectionError: no route to host"):
+        agent(Broken(messages=iter([])), pings).invoke("go")

@@ -57,3 +57,18 @@ def test_changed_payload_is_rejected_then_fixed(graph, rules):
     model, out = run(graph, rules, changed, review("email", "sms"))
     assert out.interactions[0].payload is None
     assert "payload" in model.seen[1][-1].content
+
+
+def test_body_over_max_length_is_rejected_then_fixed(graph, rules):
+    long = call("Review", interactions=[interaction("email"), interaction("sms", "x" * 161)], notes="n")
+    model, out = run(graph, rules, long, review("email", "sms"))
+    assert len(out.interactions[1].body) <= 160
+    error = model.seen[1][-1].content
+    assert "161" in error and "160" in error
+
+
+def test_subject_on_a_channel_without_subject_is_rejected_then_fixed(graph, rules):
+    bad = call("Review", interactions=[interaction("email"), {**interaction("sms"), "subject": "Reports"}], notes="n")
+    model, out = run(graph, rules, bad, review("email", "sms"))
+    assert out.interactions[1].subject is None
+    assert "subject" in model.seen[1][-1].content

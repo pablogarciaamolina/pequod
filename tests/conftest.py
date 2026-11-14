@@ -100,3 +100,42 @@ def rules(cfg):
     from pequod.types import ChannelRules
 
     return {name: ChannelRules.model_validate(dict(c.rules)) for name, c in cfg.channels.items()}
+
+
+# --- time and operator doubles for scheduler and loop tests ---
+
+from datetime import timedelta
+
+
+class Clock:
+    """A settable time; call it to read the time."""
+
+    def __init__(self, now=NOW):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+
+class FakeOperator:
+    """Scripted operator. An item is a command ("ok", "stop", "send"), None (this wait just lets the time
+    pass) or a function that is called (for example to write a reply into the hub) before the next item.
+    With an empty script, waiting lets the time pass."""
+
+    def __init__(self, clock, script=()):
+        self.clock, self.script, self.waits, self.cleared = clock, list(script), [], 0
+
+    def clear(self):
+        self.cleared += 1
+
+    def wait(self, seconds):
+        self.waits.append(seconds)
+        while self.script:
+            item = self.script.pop(0)
+            if item is None:
+                break
+            if not callable(item):
+                return item
+            item()
+        self.clock.now += timedelta(seconds=seconds)
+        return None

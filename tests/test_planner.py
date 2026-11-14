@@ -58,3 +58,9 @@ def test_wrong_number_of_paths_is_rejected_then_fixed(graph, catalog, rules):
 def test_prompt_ends_with_angle(graph, catalog, rules):
     model, _ = run(graph, catalog, rules, planned([wave()], [wave("sms")]))
     assert model.seen[0][0].content.endswith(ANGLE)
+
+
+def test_message_does_not_show_an_empty_waves_list(graph, catalog, rules):
+    """A small model copies `"waves": []` from its input instead of planning."""
+    model, _ = run(graph, catalog, rules, planned([wave("email")], [wave("sms")]))
+    assert "waves" not in model.seen[0][1].content.split("Paths:")[1]
