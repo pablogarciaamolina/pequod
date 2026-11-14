@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from conftest import ANGLE, NOW, Clock, FakeOperator, call, fake, interaction, path, wave
 
@@ -11,6 +13,7 @@ from pequod.agents.updater import Updater
 from pequod.channels import build_channels
 from pequod.channels.mock_hub import MockHub
 from pequod.engagement import Agents, EngagementLoop, Scheduler
+from pequod.trace import Trace
 
 CAUSE = "the sync only runs at night"
 
@@ -52,10 +55,20 @@ class World:
             resolver=Resolver(m["resolver"], graph, 4, ANGLE),
         )
         scheduler = Scheduler(channels, self.operator, 24, self.clock)
-        self.loop = EngagementLoop("Find the problem", agents, channels, scheduler, max_iterations, self.clock)
+        self.trace = Trace(tmp_path / "run")
+        self.loop = EngagementLoop(
+            "Find the problem", agents, channels, scheduler, max_iterations, self.clock, graph, self.trace
+        )
 
     def reply(self, channel, body):
         return lambda: self.hub.add_reply(channel, body, self.clock.now)
+
+    def files(self):
+        return sorted(f.name for f in self.trace.folder.iterdir())
+
+    def nodes(self, n):
+        data = json.loads((self.trace.folder / f"graph_{n}.json").read_text(encoding="utf-8"))
+        return [node["id"] for node in data["nodes"]]
 
     def said_to(self, agent):
         """The user messages an agent's model received, one per agent run."""
@@ -159,3 +172,71 @@ def test_agent_failure_stops_the_run(world):
 def test_more_iterations_than_the_default_graph_limit(world):
     w = world(updater=[signal()] * 8, iterations=8, max_iterations=8)
     assert w.loop.run()["iteration"] == 8
+
+
+# --- trace, snapshots and report (Stage 4) ---
+
+
+def test_engaged_run_leaves_trace_snapshots_and_report(world):
+    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)])
+    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    w.loop.run()
+    assert w.files() == ["graph_0.json", "graph_1.json", "report.md", "trace.jsonl"]
+    (record,) = w.trace.records()
+    assert (record.wave, record.snapshot, record.reason) == (1, "graph_0.json", "root_problem_stated")
+    assert [i.channel for i in record.interactions] == ["email", "whatsapp"]
+    assert [r.body for r in record.replies] == [CAUSE]
+    assert record.stop_signal.root_problem_stated and record.stop_signal.evidence == CAUSE
+    assert len(record.paths) == 2 and "on email" in record.paths[0]
+    report = (w.trace.folder / "report.md").read_text(encoding="utf-8")
+    assert report.startswith("Stop reason: root_problem_stated") and "THE REPORT" in report
+
+
+def test_each_wave_gets_a_line_and_a_snapshot(world):
+    w = world(updater=[signal(), signal()], iterations=2, max_iterations=2)
+    w.loop.run()
+    assert w.files() == ["graph_0.json", "graph_1.json", "graph_2.json", "report.md", "trace.jsonl"]
+    assert [(r.wave, r.snapshot, r.reason) for r in w.trace.records()] == [
+        (1, "graph_0.json", None),
+        (2, "graph_1.json", "max_iterations"),
+    ]
+
+
+def test_snapshot_shows_what_the_updater_wrote(world):
+    w = world(updater=[call("add_node", kind="fact", name="Nightly sync", attrs={}), signal()], max_iterations=1)
+    w.loop.run()
+    assert "nightly_sync" not in w.nodes(0) and "nightly_sync" in w.nodes(1)
+
+
+def test_late_reply_is_in_the_line_of_the_update_that_absorbed_it(world):
+    w = world(updater=[signal(), signal(), signal()], iterations=3, max_iterations=3)
+    w.operator.script = [None, None, w.reply("sms", "late answer")]  # written during wave 2's wait
+    w.loop.run()
+    assert [[r.body for r in record.replies] for record in w.trace.records()] == [[], ["late answer"], []]
+
+
+def test_trace_line_has_the_real_send_time(world):
+    w = world(updater=[signal()], operator=["send", "ok"], max_iterations=1)
+    w.loop.run()
+    assert [i.send_at for i in w.trace.records()[0].interactions] == [NOW, NOW]
+
+
+def test_stop_before_any_send_leaves_one_line_without_interactions(world):
+    w = world(updater=[], operator=["stop"])
+    w.loop.run()
+    (record,) = w.trace.records()
+    assert record.interactions == [] and record.reason == "operator_stop" and len(record.paths) == 2
+    assert "report.md" in w.files()
+
+
+def test_trace_survives_a_crash(world):
+    from langchain_core.messages import AIMessage
+
+    planner = [PLANNER, *[AIMessage("I would rather chat.") for _ in range(4)]]
+    w = world(updater=[signal()], iterations=2, planner=planner)
+    with pytest.raises(AgentError, match="planner"):
+        w.loop.run()
+    assert w.files() == ["graph_0.json", "graph_1.json", "trace.jsonl"]
+    assert [r.wave for r in w.trace.records()] == [1]
+    text = w.trace.explain()
+    assert "Wave 1" in text and "Wave 2" not in text and "No report" in text
