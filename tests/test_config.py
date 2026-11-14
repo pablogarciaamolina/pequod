@@ -1,0 +1,67 @@
+import subprocess
+
+import pytest
+from conftest import load
+from hydra.errors import MissingConfigException
+
+from pequod.types import ChannelRules
+
+
+def test_default_config_composes():
+    cfg = load()
+    assert set(cfg.run) == {"max_iterations", "max_paths", "max_waves", "reply_window_h"}
+    assert cfg.engagement.persona.name == "Alex Carter"
+    assert set(cfg.engagement.channels) == {"email", "sms", "whatsapp"}
+    assert cfg.angle.name == "clarity"
+    assert set(cfg.strategies) == {"plain_message", "kb_link", "booking_link", "intake_form"}
+    assert cfg.agents.updater.max_steps == 8
+
+
+def test_default_channels_are_mock():
+    cfg = load()
+    assert set(cfg.channels) == set(cfg.engagement.channels)
+    assert all(c.mode == "mock" for c in cfg.channels.values())
+
+
+def test_live_switch_sets_every_channel_live():
+    cfg = load(["channels=live"])
+    assert set(cfg.channels) == set(cfg.engagement.channels)
+    assert all(c.mode == "live" for c in cfg.channels.values())
+    assert all(len(c.credentials) > 0 for c in cfg.channels.values())
+
+
+def test_every_agent_points_to_a_defined_model():
+    cfg = load()
+    assert set(cfg.agents) == {"strategist", "planner", "composer", "reviewer", "updater", "resolver"}
+    assert all(a.model in cfg.models for a in cfg.agents.values())
+
+
+@pytest.mark.parametrize("angle", ["clarity", "empathy", "reassurance", "curiosity", "helpfulness"])
+def test_each_angle_has_text(angle):
+    assert load([f"angle={angle}"]).angle.text.strip()
+
+
+def test_cli_help_runs():
+    out = subprocess.run(["pequod", "--help"], capture_output=True, text=True)
+    assert out.returncode == 0
+    assert "angle: clarity" in out.stdout
+
+
+def test_unknown_angle_fails_clearly():
+    with pytest.raises(MissingConfigException):
+        load(["angle=nope"])
+
+
+@pytest.mark.parametrize("mode", ["mock", "live"])
+def test_channel_rules_validate(mode):
+    channels = load([f"channels={mode}"]).channels
+    for channel in channels.values():
+        ChannelRules.model_validate(dict(channel.rules))
+    assert channels.sms.rules.max_length == 160
+    assert channels.email.rules.subject is True
+    assert channels.sms.rules.subject is False
+
+
+def test_channel_rules_are_the_same_in_mock_and_live():
+    mock, live = load().channels, load(["channels=live"]).channels
+    assert {k: v.rules for k, v in mock.items()} == {k: v.rules for k, v in live.items()}
