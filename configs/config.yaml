@@ -12,8 +12,9 @@ run:
   reply_window_h: 24    # wait after the last send
 
 models:
-  local: {provider: ollama, name: "qwen2.5:14b"}
+  ollama_qwen: {provider: ollama, name: "qwen2.5:14b"}
   claude: {provider: anthropic, name: claude-sonnet-5-5}
+  hf_qwen_local: {provider: huggingface, name: Qwen/Qwen2.5-1.5B-Instruct, params: {local: true, family: qwen, pipeline_kwargs: {max_new_tokens: 512, do_sample: false}}}
 
 agents:
   strategist: {model: claude, max_steps: 4}

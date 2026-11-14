@@ -13,6 +13,9 @@ dependencies = [
     "langchain-ollama",
     "langchain-openai",
     "langchain-huggingface",
+    "python-dotenv",
+    "transformers",  # local Hugging Face weights
+    "torch",
 ]
 
 [project.scripts]
@@ -30,3 +33,5 @@ packages = ["src/pequod"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["live: calls real models (run with: uv run pytest -m live)"]
+addopts = "-m 'not live'"
