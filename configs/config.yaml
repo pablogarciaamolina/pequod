@@ -11,8 +11,11 @@ run:
   max_waves: 3          # waves planned per path
   reply_window_h: 24    # wait after the last send
 
+mock_hub: runs/mock_hub.db   # SQLite file shared by the mock channels and `pequod reply`; relative to the start folder
+
 models:
-  ollama_qwen: {provider: ollama, name: "qwen2.5:14b"}
+  # num_ctx: Ollama's default context is too small for the agents' tool outputs
+  ollama_qwen: {provider: ollama, name: "qwen2.5:14b", params: {num_ctx: 8192, temperature: 0}}
   claude: {provider: anthropic, name: claude-sonnet-5-5}
   hf_qwen_local: {provider: huggingface, name: Qwen/Qwen2.5-1.5B-Instruct, params: {local: true, family: qwen, pipeline_kwargs: {max_new_tokens: 512, do_sample: false}}}
 

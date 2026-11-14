@@ -19,6 +19,43 @@ uv run pequod --help
 
 Only the `pequod` entry point is supported. Do not run `python src/pequod/main.py` directly.
 
+### Play an engagement (mock channels)
+
+You need two terminals, both started in the repository folder.
+
+Terminal 1, the engine:
+
+```
+uv run pequod
+```
+
+Any config value can be changed on the command line, for example the model of every agent:
+
+```
+uv run pequod agents.strategist.model=ollama_qwen agents.planner.model=ollama_qwen agents.composer.model=ollama_qwen agents.reviewer.model=ollama_qwen agents.updater.model=ollama_qwen agents.resolver.model=ollama_qwen
+```
+
+Each iteration the engine plans, writes and reviews its messages, then waits. Every sent message is printed. While it waits, type:
+
+| Key | Effect |
+|---|---|
+| `s` + Enter | send all pending messages now (otherwise each one is sent at its planned time) |
+| Enter | go to the next iteration; messages not sent yet are dropped |
+| `q` + Enter | stop the engagement; the final report is still written |
+
+Terminal 2, you as the client (Alex):
+
+```
+uv run pequod reply whatsapp "Honestly, our stock numbers are a day old."
+```
+
+Replies can be sent at any time, on any channel. The engine reads them at the start of the next iteration.
+
+The run ends with a report for the supervisor when the client states the root problem, accepts a solution, opts out,
+when `run.max_iterations` is reached, or when you press `q`. The log of a run is saved in `runs/<time>/main.log`.
+
+Sent messages and replies are stored in `runs/mock_hub.db` (config key `mock_hub`). `channels=live` is not available yet.
+
 ## Test
 
 ```
