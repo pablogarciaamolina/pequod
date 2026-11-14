@@ -1,10 +1,11 @@
 """A2 Planner: each path -> waves."""
 
+import json
 from datetime import datetime
 
 from langchain_core.language_models import BaseChatModel
 
-from pequod.agents.base import Agent, dump
+from pequod.agents.base import Agent
 from pequod.agents.tools.channel_tools import channel_tools
 from pequod.agents.tools.graph_tools import read_tools
 from pequod.agents.tools.strategy_tools import strategy_tools
@@ -62,7 +63,7 @@ class Planner(Agent):
         message = (
             f"Current time: {now.isoformat()}\n"
             f"Plan at most {self.max_waves} waves per path.\n\n"
-            f"Paths:\n{dump(paths)}"
+            f"Paths:\n{json.dumps([p.model_dump(exclude={'waves'}) for p in paths], indent=2)}"
         )
         planned = self.invoke(message, check).paths
         return [p.model_copy(update={"waves": out.waves[: self.max_waves]}) for p, out in zip(paths, planned)]

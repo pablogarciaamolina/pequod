@@ -4,7 +4,7 @@ from datetime import datetime
 
 from langchain_core.language_models import BaseChatModel
 
-from pequod.agents.base import Agent, dump
+from pequod.agents.base import Agent, dump, fits
 from pequod.agents.tools.channel_tools import channel_tools
 from pequod.agents.tools.graph_tools import read_tools
 from pequod.graph import KnowledgeGraph
@@ -40,6 +40,7 @@ class Reviewer(Agent):
     ) -> None:
         tools = read_tools(graph) + channel_tools(rules)
         super().__init__("reviewer", model, PROMPT, tools, Review, max_steps, angle)
+        self.rules = rules
 
     def run(self, drafts: list[Interaction], now: datetime) -> Review:
         channels = [d.channel for d in drafts]
@@ -49,6 +50,8 @@ class Reviewer(Agent):
                 raise ValueError(f"Keep the same interactions and channels, in order: {', '.join(channels)}")
             if [i.payload for i in out.interactions] != [d.payload for d in drafts]:
                 raise ValueError("Leave every payload exactly as it is in the drafts.")
+            for i in out.interactions:
+                fits(i, self.rules[i.channel])
 
         message = (
             f"Current time: {now.isoformat()}\n\n"

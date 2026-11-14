@@ -2,7 +2,7 @@
 
 from langchain_core.language_models import BaseChatModel
 
-from pequod.agents.base import Agent, AgentError
+from pequod.agents.base import Agent, AgentError, fits
 from pequod.agents.tools.channel_tools import channel_tools
 from pequod.agents.tools.graph_tools import read_tools
 from pequod.agents.tools.strategy_tools import strategy_tools
@@ -46,11 +46,11 @@ class Composer(Agent):
     ) -> None:
         tools = read_tools(graph) + strategy_tools(catalog) + channel_tools(rules)
         super().__init__("composer", model, PROMPT, tools, Interaction, max_steps, angle)
-        self.channels = list(rules)
+        self.rules = rules
         self.catalog = catalog
 
     def run(self, path: Path, taken: list[str]) -> Interaction:
-        free = [c for c in self.channels if c not in taken]
+        free = [c for c in self.rules if c not in taken]
         if not free:
             raise AgentError("composer: no free channel left for this path")
 
@@ -60,6 +60,7 @@ class Composer(Agent):
             allowed = [s.payload for s in self.catalog.for_channel(out.channel).values() if s.payload]
             if out.payload is not None and out.payload not in allowed:
                 raise ValueError(f"payload must be empty or copied from the catalog for {out.channel}: {allowed}")
+            fits(out, self.rules[out.channel])
 
         message = (
             f"Wave to write:\n{path.waves[0].model_dump_json(indent=2)}\n\n"
