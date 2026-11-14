@@ -102,6 +102,27 @@ class Resolution(BaseModel):
     report: str
 
 
+# --- trace ---
+
+class SentLine(BaseModel):
+    channel: str
+    send_at: AwareDatetime  # when it really went out
+    text: str  # first 80 characters of the body
+    cut: bool  # True when the body was longer
+
+
+class WaveRecord(BaseModel):
+    """One line of trace.jsonl: what one wave planned, sent and learned."""
+
+    wave: int
+    snapshot: str  # file name of the graph this wave was planned from
+    paths: list[str]  # "<rationale> -> <intent> on <channel>"
+    interactions: list[SentLine]
+    replies: list[Reply]  # absorbed by the update that closed this wave
+    stop_signal: StopSignal
+    reason: StopReason | None = None  # why the loop stopped after this wave; None = it continued
+
+
 # --- agent outputs that wrap a list ---
 
 class Paths(BaseModel):

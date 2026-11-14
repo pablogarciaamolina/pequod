@@ -19,6 +19,8 @@ from pequod.agents.reviewer import Reviewer
 from pequod.agents.strategist import Strategist
 from pequod.agents.updater import Updater
 from pequod.channels.base import Channel
+from pequod.graph import KnowledgeGraph
+from pequod.trace import Trace
 from pequod.types import Interaction, Path, Resolution, StopReason, StopSignal
 
 log = logging.getLogger(__name__)
@@ -142,6 +144,8 @@ class EngagementLoop:
         scheduler: Scheduler,
         max_iterations: int,
         clock: Callable[[], datetime],
+        graph: KnowledgeGraph,
+        trace: Trace,
     ) -> None:
         self.objective = objective
         self.agents = agents
@@ -149,6 +153,8 @@ class EngagementLoop:
         self.scheduler = scheduler
         self.max_iterations = max_iterations
         self.clock = clock
+        self.graph = graph  # only snapshotted here; agents use it through their tools
+        self.trace = trace
 
         g = StateGraph(LoopState)
         for name in ("update", "plan", "act", "wait", "resolve"):
@@ -161,7 +167,7 @@ class EngagementLoop:
         g.add_edge("act", "wait")
         g.add_edge("wait", "update")
         g.add_edge("resolve", END)
-        self.graph = g.compile()
+        self.flow = g.compile()
 
     def run(self) -> LoopState:
         self.started = self.clock()
@@ -171,7 +177,7 @@ class EngagementLoop:
             operator_stop=False, reason=None, resolution=None,
         )
         # every iteration is 4 graph steps; LangGraph's default limit is 25
-        return self.graph.invoke(state, {"recursion_limit": 4 * self.max_iterations + 10})
+        return self.flow.invoke(state, {"recursion_limit": 4 * self.max_iterations + 10})
 
     def update(self, state: LoopState) -> dict:
         """Absorb what came in: every reply since the start that was not processed yet, from any wave."""
@@ -186,6 +192,10 @@ class EngagementLoop:
             or ("operator_stop" if state["operator_stop"] else None)
             or ("max_iterations" if state["iteration"] >= self.max_iterations else None)
         )
+        wave = state["iteration"]  # the wave this update closes; 0 = the start, nothing sent yet
+        self.trace.snapshot(self.graph, wave)
+        if wave:
+            self.trace.record(wave, state["paths"], state["sent"], replies, signal, reason)
         return {"signal": signal, "reason": reason, "sent": []}
 
     def plan(self, state: LoopState) -> dict:
@@ -211,5 +221,7 @@ class EngagementLoop:
     def resolve(self, state: LoopState) -> dict:
         log.info("=== Stopped: %s ===", state["reason"])
         resolution = self.agents.resolver.run(state["reason"], state["signal"], self.objective)
+        self.trace.report(state["reason"], resolution)
         log.info("REPORT FOR THE SUPERVISOR\n%s", resolution.report)
+        log.info("Run folder: %s (cards: pequod explain <folder>)", self.trace.folder)
         return {"resolution": resolution}

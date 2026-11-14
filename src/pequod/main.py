@@ -8,6 +8,7 @@ from pathlib import Path
 import hydra
 from dotenv import load_dotenv
 from hydra import compose, initialize_config_dir
+from hydra.core.hydra_config import HydraConfig
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 
@@ -24,6 +25,7 @@ from pequod.engagement import Agents, EngagementLoop, Operator, Scheduler
 from pequod.graph import KnowledgeGraph
 from pequod.models.base import build_named
 from pequod.strategies import StrategyCatalog
+from pequod.trace import Trace
 from pequod.types import Engagement
 
 log = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ log = logging.getLogger(__name__)
 # Absolute: as a console script, Hydra reads a relative config_path as a package.
 CONFIGS = str(Path(__file__).parents[2] / "configs")
 USAGE = 'Usage: pequod reply <channel> "text"'
+EXPLAIN_USAGE = "Usage: pequod explain <run folder>   (for example runs/2026-11-14_19-10-00)"
 
 
 def now() -> datetime:
@@ -54,8 +57,24 @@ def reply(args: list[str]) -> int:
     return 0
 
 
-def build_loop(cfg: DictConfig, operator: Operator) -> EngagementLoop:
-    """Every object of a run, built from the config."""
+def explain(args: list[str]) -> int:
+    """Print one card per wave of a run, then its report. Returns the exit code."""
+    if len(args) != 1:
+        print(EXPLAIN_USAGE, file=sys.stderr)
+        return 2
+    if not Path(args[0]).is_dir():
+        print(f"No such run folder: {args[0]}", file=sys.stderr)
+        return 2
+    try:
+        print(Trace(args[0]).explain())
+    except FileNotFoundError as e:
+        print(e, file=sys.stderr)
+        return 2
+    return 0
+
+
+def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> EngagementLoop:
+    """Every object of a run, built from the config. `folder` receives the trace, snapshots and report."""
 
     def model(agent: str):
             label = cfg.agents[agent].model
@@ -89,21 +108,26 @@ def build_loop(cfg: DictConfig, operator: Operator) -> EngagementLoop:
         resolver=Resolver(model("resolver"), graph, steps["resolver"], angle),
     )
     scheduler = Scheduler(channels, operator, run.reply_window_h, now)
-    return EngagementLoop(engagement.objective, agents, channels, scheduler, run.max_iterations, now)
+    return EngagementLoop(
+        engagement.objective, agents, channels, scheduler, run.max_iterations, now, graph, Trace(folder)
+    )
 
 
 @hydra.main(version_base=None, config_path=CONFIGS, config_name="config")
 def run(cfg: DictConfig) -> None:
     load_dotenv()  # API keys and credentials from .env
     try:
-        build_loop(cfg, Operator()).run()
+        build_loop(cfg, Operator(), HydraConfig.get().runtime.output_dir).run()
     except (AgentError, ValueError, NotImplementedError) as e:
         log.error("Run stopped: %s", e, exc_info=e.__cause__ is not None)  # traceback for unexpected causes
         sys.exit(1)
 
 
 def main() -> None:
-    """Console entry. `pequod reply ...` is handled here; everything else goes to Hydra."""
-    if sys.argv[1:2] == ["reply"]:
-        sys.exit(reply(sys.argv[2:]))
+    """Console entry. `pequod reply ...` and `pequod explain ...` are handled here; the rest goes to Hydra."""
+    for stream in (sys.stdout, sys.stderr):  # messages can hold any character; a Windows pipe is not UTF-8
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    commands = {"reply": reply, "explain": explain}
+    if sys.argv[1:2] and sys.argv[1] in commands:
+        sys.exit(commands[sys.argv[1]](sys.argv[2:]))
     run()
