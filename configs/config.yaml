@@ -1,0 +1,28 @@
+defaults:
+  - engagement: alex_carter
+  - angle: clarity
+  - channels: mock
+  - strategies: default
+  - _self_
+
+run:
+  max_iterations: 5     # loop limit
+  max_paths: 2          # paths planned per iteration
+  max_waves: 3          # waves planned per path
+  reply_window_h: 24    # wait after the last send
+
+models:
+  local: {provider: ollama, name: "qwen2.5:14b"}
+  claude: {provider: anthropic, name: claude-sonnet-5-5}
+
+agents:
+  strategist: {model: claude, max_steps: 4}
+  planner: {model: claude, max_steps: 4}
+  composer: {model: claude, max_steps: 4}
+  reviewer: {model: claude, max_steps: 4}
+  updater: {model: claude, max_steps: 8}
+  resolver: {model: claude, max_steps: 4}
+
+hydra:
+  run:
+    dir: runs/${now:%Y-%m-%d_%H-%M-%S}

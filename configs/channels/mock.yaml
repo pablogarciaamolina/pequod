@@ -1,0 +1,12 @@
+email:
+  mode: mock
+  credentials: []
+  rules: {max_length: 2000, subject: true, links_ok: true}
+sms:
+  mode: mock
+  credentials: []
+  rules: {max_length: 160, subject: false, links_ok: true}
+whatsapp:
+  mode: mock
+  credentials: []
+  rules: {max_length: 1000, subject: false, links_ok: true}

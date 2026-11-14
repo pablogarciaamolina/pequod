@@ -1,0 +1,4 @@
+plain_message: {description: "Text only", channels: [email, sms, whatsapp]}
+kb_link:       {description: "Share a help article", payload: {url: "https://kb.example/erp-sync"}, channels: [email, whatsapp]}
+booking_link:  {description: "Offer a 20-min call", payload: {url: "https://cal.example/alex"}, channels: [email, sms, whatsapp]}
+intake_form:   {description: "Short problem form", payload: {url: "https://forms.example/intake"}, channels: [email]}
