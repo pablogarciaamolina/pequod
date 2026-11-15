@@ -1,0 +1,4 @@
+# Settings of the simulator (uv run pequod-sim). The hub path and the channels come from config.yaml.
+host: 127.0.0.1   # this machine only; the page has no login
+port: 8000
+refresh_s: 1      # how often the page asks for the state
