@@ -10,6 +10,7 @@ run:
   max_paths: 2          # paths planned per iteration
   max_waves: 3          # waves planned per path
   reply_window_h: 24    # wait after the last send
+  command_poll_s: 1     # how often the engine looks for commands from the simulator's buttons
 
 mock_hub: runs/mock_hub.db   # SQLite file shared by the mock channels and `pequod reply`; relative to the start folder
 
@@ -20,12 +21,12 @@ models:
   hf_qwen_local: {provider: huggingface, name: Qwen/Qwen2.5-1.5B-Instruct, params: {local: true, family: qwen, pipeline_kwargs: {max_new_tokens: 512, do_sample: false}}}
 
 agents:
-  strategist: {model: claude, max_steps: 4}
-  planner: {model: claude, max_steps: 4}
-  composer: {model: claude, max_steps: 4}
-  reviewer: {model: claude, max_steps: 4}
-  updater: {model: claude, max_steps: 8}
-  resolver: {model: claude, max_steps: 4}
+  strategist: {model: ollama_qwen, max_steps: 4}
+  planner: {model: ollama_qwen, max_steps: 4}
+  composer: {model: ollama_qwen, max_steps: 4}
+  reviewer: {model: ollama_qwen, max_steps: 4}
+  updater: {model: ollama_qwen, max_steps: 8}
+  resolver: {model: ollama_qwen, max_steps: 4}
 
 hydra:
   run:
