@@ -11,6 +11,7 @@ run:
   max_waves: 3          # waves planned per path
   reply_window_h: 24    # wait after the last send
   command_poll_s: 1     # how often the engine looks for commands from the simulator's buttons
+  register: true        # false = keep no record of the run: no trace, messages, snapshots, report, and no texts in main.log
 
 mock_hub: runs/mock_hub.db   # SQLite file shared by the mock channels and `pequod reply`; relative to the start folder
 

@@ -1,13 +1,18 @@
-# credentials = names of the env vars that must exist in .env
+# Real platforms. credentials: what the channel needs -> name of the variable that must be set in .env
 email:
   mode: live
-  credentials: [EMAIL_ADDRESS, EMAIL_APP_PASSWORD]
+  credentials: {user: EMAIL_ADDRESS, password: EMAIL_APP_PASSWORD}
+  smtp_host: smtp.gmail.com
+  smtp_port: 465
+  imap_host: imap.gmail.com
+  default_subject: "A quick question"   # used when a message has no subject
+  timeout_s: 30                           # give up on a mail server that does not answer
   rules: {max_length: 2000, subject: true, links_ok: true}
 sms:
   mode: live
-  credentials: [TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_SMS_FROM]
+  credentials: {sid: TWILIO_ACCOUNT_SID, token: TWILIO_AUTH_TOKEN, sender: TWILIO_SMS_FROM}
   rules: {max_length: 160, subject: false, links_ok: true}
 whatsapp:
   mode: live
-  credentials: [TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM]
+  credentials: {sid: TWILIO_ACCOUNT_SID, token: TWILIO_AUTH_TOKEN, sender: TWILIO_WHATSAPP_FROM}
   rules: {max_length: 1000, subject: false, links_ok: true}
