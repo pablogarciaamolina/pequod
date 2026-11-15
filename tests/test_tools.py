@@ -116,10 +116,10 @@ def test_update_node_tool_unknown_node_returns_error_text(write):
 
 def test_list_strategies_tool(strategies):
     sms = strategies["list_strategies"].invoke({"channel": "sms"})
-    assert "plain_message" in sms and "booking_link" in sms and "intake_form" not in sms
-    assert "https://cal.example/alex" in sms
+    assert "plain_message" in sms and "call_link" in sms and "form_link" not in sms
+    assert "https://cal.example/call" in sms
     everything = strategies["list_strategies"].invoke({})
-    assert all(s in everything for s in ("plain_message", "kb_link", "booking_link", "intake_form"))
+    assert all(s in everything for s in ("plain_message", "info_link", "call_link", "form_link"))
 
 
 def test_list_strategies_unknown_channel_returns_error_text(strategies):

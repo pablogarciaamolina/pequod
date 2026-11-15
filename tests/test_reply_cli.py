@@ -43,3 +43,12 @@ def test_main_dispatches_reply(monkeypatch):
     with pytest.raises(SystemExit) as e:
         cli.main()
     assert e.value.code == 0 and replies("sms") == ["hi"]
+
+
+def test_reply_follows_the_channels_of_the_running_run(capsys, tmp_path):
+    hub = MockHub("runs/mock_hub.db")
+    hub.start_run(tmp_path / "run")
+    hub.set_channels({"email": "someone@customer.test"})
+    assert cli.reply(["sms", "hi"]) == 2
+    assert "Use one of: email" in capsys.readouterr().err
+    assert cli.reply(["email", "hi"]) == 0

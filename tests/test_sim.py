@@ -130,3 +130,12 @@ def test_sim_command_is_installed():
 
     (script,) = entry_points(group="console_scripts", name="pequod-sim")
     assert script.value == "pequod_sim.app:main"
+
+
+def test_page_shows_the_channels_of_the_running_run(client, hub, tmp_path):
+    """The engine may run another engagement than the default one."""
+    hub.start_run(tmp_path / "run")
+    hub.set_channels({"email": "someone@customer.test"})
+    assert [(c["name"], c["address"]) for c in state(client)["channels"]] == [("email", "someone@customer.test")]
+    assert client.post("/api/reply", json={"channel": "sms", "text": "hi"}).status_code == 422
+    assert client.post("/api/reply", json={"channel": "email", "text": "hi"}).status_code == 200

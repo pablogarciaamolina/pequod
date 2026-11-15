@@ -5,11 +5,11 @@ from pequod.agents.resolver import Resolver
 from pequod.types import Resolution, StopSignal
 
 OBJECTIVE = "Surface the real underlying problem and resolve it."
-SIGNAL = StopSignal(root_problem_stated=True, evidence="the sync only runs at night")
-REASONS = ["root_problem_stated", "solution_accepted", "opt_out", "max_iterations", "operator_stop"]
+SIGNAL = StopSignal(objective_met=True, evidence="the sync only runs at night")
+REASONS = ["objective_met", "solution_accepted", "opt_out", "max_iterations", "operator_stop"]
 
 
-def run(graph, reason="root_problem_stated"):
+def run(graph, reason="objective_met"):
     model = fake(call("Resolution", report="Learned: nightly sync. Recommended reply: enable hourly sync."))
     return model, Resolver(model, graph, max_steps=4, angle=ANGLE).run(reason, SIGNAL, OBJECTIVE)
 

@@ -9,7 +9,7 @@ from pequod.types import Interaction, Path, Reply, Resolution, StopSignal, WaveR
 PATHS = [Path(**path(wave("email", "open_door")))]
 SENT = [Interaction(**interaction("email"))]
 REPLIES = [Reply(id="whatsapp-2", channel="whatsapp", body="Our stock numbers are a day old", received_at=NOW)]
-SIGNAL = StopSignal(root_problem_stated=True, evidence="a day old")
+SIGNAL = StopSignal(objective_met=True, evidence="a day old")
 
 
 @pytest.fixture
@@ -29,11 +29,11 @@ def test_snapshot_writes_the_graph(trace, graph):
 
 def test_record_appends_one_json_line_per_wave(trace):
     first = trace.record(1, PATHS, SENT, REPLIES, StopSignal(), None)
-    second = trace.record(2, PATHS, [], [], SIGNAL, "root_problem_stated")
+    second = trace.record(2, PATHS, [], [], SIGNAL, "objective_met")
     assert len(lines(trace)) == 2 and trace.records() == [first, second]
     assert [(r.wave, r.snapshot, r.reason) for r in trace.records()] == [
         (1, "graph_0.json", None),
-        (2, "graph_1.json", "root_problem_stated"),
+        (2, "graph_1.json", "objective_met"),
     ]
     assert type(first) is WaveRecord and first.replies == REPLIES and second.stop_signal == SIGNAL
 
@@ -85,12 +85,12 @@ CARD = """Wave 1 · planned from graph_0.json
     - email 2026-11-16 09:00 UTC: "Hi Alex, which report is slowest?"
   Replies absorbed
     - whatsapp 2026-11-16 08:00 UTC: "Our stock numbers are a day old"
-  Stop signal: root_problem_stated · "a day old"
-  Decision: stop (root_problem_stated)"""
+  Stop signal: objective_met · "a day old"
+  Decision: stop (objective_met)"""
 
 
 def test_card_shows_paths_sent_replies_signal_and_decision(trace):
-    trace.record(1, PATHS, SENT, REPLIES, SIGNAL, "root_problem_stated")
+    trace.record(1, PATHS, SENT, REPLIES, SIGNAL, "objective_met")
     assert trace.explain().startswith(CARD + "\n")
 
 
@@ -108,8 +108,8 @@ def test_cut_body_is_marked(trace):
 
 
 def test_several_true_flags_are_all_named(trace):
-    trace.record(1, PATHS, [], [], StopSignal(opt_out=True, root_problem_stated=True, evidence="stop"), "opt_out")
-    assert 'Stop signal: root_problem_stated, opt_out · "stop"' in trace.explain()
+    trace.record(1, PATHS, [], [], StopSignal(opt_out=True, objective_met=True, evidence="stop"), "opt_out")
+    assert 'Stop signal: objective_met, opt_out · "stop"' in trace.explain()
     assert "Decision: stop (opt_out)" in trace.explain()
 
 
@@ -271,10 +271,10 @@ def test_a_status_that_cannot_be_written_does_not_stop_the_run(trace, monkeypatc
 def test_register_off_writes_only_a_status_without_text(tmp_path, graph):
     trace = Trace(tmp_path / "run", register=False)
     assert trace.snapshot(graph, 0) == "graph_0.json"
-    record = trace.record(1, PATHS, SENT, REPLIES, SIGNAL, "root_problem_stated")
+    record = trace.record(1, PATHS, SENT, REPLIES, SIGNAL, "objective_met")
     trace.sent(SENT[0])
     trace.received(REPLIES[0])
-    trace.report("root_problem_stated", Resolution(report="THE REPORT"))
+    trace.report("objective_met", Resolution(report="THE REPORT"))
     trace.status("waiting", 1, 5, SENT)
     assert record.wave == 1  # callers still get their record
     assert [f.name for f in trace.folder.iterdir()] == ["status.json"]

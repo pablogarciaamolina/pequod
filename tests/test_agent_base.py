@@ -52,6 +52,14 @@ def test_angle_is_appended_to_the_prompt(pings):
     assert model.seen[0][0].content == PROMPT + "\n\nConversational angle: Lean on clarity"
 
 
+def test_role_is_appended_before_the_angle(pings):
+    model = fake(STOP)
+    agent(model, pings, angle="Lean on clarity", role="On email: Sam from a pet shop").invoke("go")
+    system = model.seen[0][0].content
+    assert system.startswith(PROMPT) and system.endswith("Conversational angle: Lean on clarity")
+    assert "On email: Sam from a pet shop" in system[len(PROMPT):]
+
+
 def test_invalid_output_is_returned_to_the_model_then_fixed(pings):
     model = fake(
         call("Interaction", channel="sms", send_at="2026-11-16T10:00:00", body="hi"),

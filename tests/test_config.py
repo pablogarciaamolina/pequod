@@ -13,7 +13,7 @@ def test_default_config_composes():
     assert cfg.engagement.persona.name == "Alex Carter"
     assert set(cfg.engagement.channels) == {"email", "sms", "whatsapp"}
     assert cfg.angle.name == "clarity"
-    assert set(cfg.strategies) == {"plain_message", "kb_link", "booking_link", "intake_form"}
+    assert {"plain_message", "direct_ask", "gentle_nudge", "info_link", "call_link", "form_link"} <= set(cfg.strategies)
     assert cfg.agents.updater.max_steps == 8
 
 
@@ -28,6 +28,11 @@ def test_live_switch_sets_every_channel_live():
     assert set(cfg.channels) == set(cfg.engagement.channels)
     assert all(c.mode == "live" for c in cfg.channels.values())
     assert all(len(c.credentials) > 0 for c in cfg.channels.values())
+
+
+@pytest.mark.parametrize("mode", ["mock", "live"])
+def test_every_channel_has_a_role_setting_empty_by_default(mode):
+    assert all(c.role == "" for c in load([f"channels={mode}"]).channels.values())
 
 
 def test_every_agent_points_to_a_defined_model():

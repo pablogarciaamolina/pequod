@@ -82,14 +82,14 @@ def world(tmp_path, cfg, graph, catalog, rules):
 
 
 def test_engaged_branch(world):
-    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)])
+    w = world(updater=[signal(objective_met=True, evidence=CAUSE)])
     w.operator.script = [w.reply("whatsapp", CAUSE)]
     state = w.loop.run()
-    assert state["reason"] == "root_problem_stated" and state["iteration"] == 1
+    assert state["reason"] == "objective_met" and state["iteration"] == 1
     assert state["resolution"].report == "THE REPORT"
     assert [m["channel"] for m in w.hub.sent()] == ["email", "whatsapp"]
-    assert "root_problem_stated" in w.said_to("resolver")[0] and CAUSE in w.said_to("resolver")[0]
-    assert CAUSE in w.said_to("updater")[0]
+    assert "objective_met" in w.said_to("resolver")[0] and CAUSE in w.said_to("resolver")[0]
+    assert CAUSE in w.said_to("updater")[0] and "Find the problem" in w.said_to("updater")[0]
 
 
 def test_resistant_branch_ends_at_max_iterations(world):
@@ -101,7 +101,7 @@ def test_resistant_branch_ends_at_max_iterations(world):
 
 
 def test_opt_out_wins(world):
-    w = world(updater=[signal(opt_out=True, root_problem_stated=True, evidence="stop")])
+    w = world(updater=[signal(opt_out=True, objective_met=True, evidence="stop")])
     assert w.loop.run()["reason"] == "opt_out"
 
 
@@ -179,18 +179,18 @@ def test_more_iterations_than_the_default_graph_limit(world):
 
 
 def test_engaged_run_leaves_trace_snapshots_and_report(world):
-    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)])
+    w = world(updater=[signal(objective_met=True, evidence=CAUSE)])
     w.operator.script = [w.reply("whatsapp", CAUSE)]
     w.loop.run()
     assert w.files() == ["graph_0.json", "graph_1.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
     (record,) = w.trace.records()
-    assert (record.wave, record.snapshot, record.reason) == (1, "graph_0.json", "root_problem_stated")
+    assert (record.wave, record.snapshot, record.reason) == (1, "graph_0.json", "objective_met")
     assert [i.channel for i in record.interactions] == ["email", "whatsapp"]
     assert [r.body for r in record.replies] == [CAUSE]
-    assert record.stop_signal.root_problem_stated and record.stop_signal.evidence == CAUSE
+    assert record.stop_signal.objective_met and record.stop_signal.evidence == CAUSE
     assert len(record.paths) == 2 and "on email" in record.paths[0]
     report = (w.trace.folder / "report.md").read_text(encoding="utf-8")
-    assert report.startswith("Stop reason: root_problem_stated") and "THE REPORT" in report
+    assert report.startswith("Stop reason: objective_met") and "THE REPORT" in report
 
 
 def test_each_wave_gets_a_line_and_a_snapshot(world):
@@ -267,7 +267,7 @@ def test_waiting_status_lists_the_pending_messages(world):
 
 
 def test_run_registers_every_message_in_full(world):
-    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)])
+    w = world(updater=[signal(objective_met=True, evidence=CAUSE)])
     w.operator.script = [w.reply("whatsapp", CAUSE)]
     w.loop.run()
     assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "email"), ("out", "whatsapp"), ("in", "whatsapp")]
@@ -288,10 +288,10 @@ def test_messages_are_registered_even_if_the_updater_fails(world):
 
 
 def test_register_off_run_leaves_no_text_in_the_folder(world):
-    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)], register=False)
+    w = world(updater=[signal(objective_met=True, evidence=CAUSE)], register=False)
     w.operator.script = [w.reply("whatsapp", CAUSE)]
     state = w.loop.run()
-    assert state["reason"] == "root_problem_stated" and state["resolution"].report == "THE REPORT"
+    assert state["reason"] == "objective_met" and state["resolution"].report == "THE REPORT"
     assert w.files() == ["status.json"]
     text = (w.trace.folder / "status.json").read_text(encoding="utf-8")
     assert all(secret not in text for secret in (CAUSE, "which report is slowest", "THE REPORT"))

@@ -61,7 +61,7 @@ def test_no_free_channel_fails_without_a_model_call(graph, catalog, rules):
 
 
 def test_catalog_payload_is_accepted(graph, catalog, rules):
-    payload = {"url": "https://kb.example/erp-sync"}
+    payload = {"url": "https://example.com/info"}
     _, out = run(graph, catalog, rules, call("Interaction", **interaction("email"), payload=payload))
     assert out.payload == payload
 
@@ -74,7 +74,7 @@ def test_invented_payload_is_rejected_then_fixed(graph, catalog, rules):
 
 
 def test_catalog_payload_of_another_channel_is_rejected_then_fixed(graph, catalog, rules):
-    form = call("Interaction", **interaction("sms"), payload={"url": "https://forms.example/intake"})
+    form = call("Interaction", **interaction("sms"), payload={"url": "https://forms.example/questions"})
     _, out = run(graph, catalog, rules, form, answer("sms"))
     assert out.payload is None
 

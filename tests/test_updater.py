@@ -12,9 +12,12 @@ def nothing():
     return call("StopSignal")
 
 
+OBJECTIVE = "Find out the name of the persona's dog."
+
+
 def run(graph, *messages, sent=SENT, replies=REPLIES):
     model = fake(*messages)
-    return model, Updater(model, graph, max_steps=8).run(sent, replies)
+    return model, Updater(model, graph, max_steps=8).run(sent, replies, OBJECTIVE)
 
 
 def test_no_new_input_makes_no_model_call(graph):
@@ -40,7 +43,7 @@ def test_tool_calls_write_into_the_graph(graph):
 
 
 def test_returns_stop_signal_with_evidence(graph):
-    _, out = run(graph, call("StopSignal", root_problem_stated=True, evidence="the sync only runs at night"))
+    _, out = run(graph, call("StopSignal", objective_met=True, evidence="the sync only runs at night"))
     assert out.stop and out.evidence == "the sync only runs at night"
 
 
@@ -48,6 +51,11 @@ def test_message_has_sent_and_replies(graph):
     model, _ = run(graph, nothing())
     message = model.seen[0][1].content
     assert "which report is slowest" in message and "stock numbers are a day old" in message
+
+
+def test_message_has_the_objective(graph):
+    model, _ = run(graph, nothing())
+    assert OBJECTIVE in model.seen[0][1].content
 
 
 def test_prompt_has_no_angle(graph):

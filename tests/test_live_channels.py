@@ -40,7 +40,10 @@ def live():
 
 def test_live_channels_are_built_with_address_and_credentials(live, monkeypatch):
     made = []
-    monkeypatch.setattr("pequod.channels.sms.Client", lambda sid, token: made.append((sid, token)) or "client")
+    monkeypatch.setattr(
+        "pequod.channels.sms.Client",
+        lambda sid, token, http_client: made.append((sid, token, http_client.timeout)) or "client",
+    )
     channels = build_channels(live, ADDRESSES, None, clock, ENV)
     assert {name: type(c) for name, c in channels.items()} == {"email": EmailLive, "sms": SmsLive, "whatsapp": WhatsAppLive}
     email = channels["email"]
@@ -48,7 +51,7 @@ def test_live_channels_are_built_with_address_and_credentials(live, monkeypatch)
     assert (email.smtp_host, email.smtp_port, email.imap_host, email.timeout_s) == ("smtp.gmail.com", 465, "imap.gmail.com", 30)
     assert (channels["sms"].address, channels["sms"].sender) == ("+34600111222", "+15550001111")
     assert channels["whatsapp"].sender == "+15550002222" and channels["sms"].client == "client"
-    assert made == [("ACsid", "twilio-token-456")] * 2
+    assert made == [("ACsid", "twilio-token-456", 30)] * 2  # a stalled network must not hang the run
     assert email.rules == ChannelRules.model_validate(dict(live.email.rules))
 
 

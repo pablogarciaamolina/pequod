@@ -140,3 +140,12 @@ def test_two_callers_never_take_the_same_command(hub):
         [t.start() for t in threads]
         [t.join() for t in threads]
         assert sorted(taken) == ["ok", "ok", "send", "send", "stop"]
+
+
+def test_hub_remembers_the_channels_of_the_current_run(hub, tmp_path):
+    assert hub.channels() is None
+    hub.start_run(tmp_path / "one")
+    hub.set_channels({"email": "alex@northwind.example", "whatsapp": "+00 000 000"})
+    assert hub.channels() == {"email": "alex@northwind.example", "whatsapp": "+00 000 000"}
+    hub.start_run(tmp_path / "two")  # a new run starts without the old run's channels
+    assert hub.channels() is None

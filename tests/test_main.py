@@ -53,6 +53,22 @@ def test_build_loop_builds_every_agent_with_its_config(models, tmp_path):
     assert a.composer.system_prompt.endswith(cfg.angle.text)
 
 
+def test_channel_roles_go_into_the_prompts_of_the_agents_that_plan_and_write(models, tmp_path):
+    cfg = load(["channels.email.role=Sam from Paws and Co", "~engagement.channels.sms", "channels.sms.role=Not used"])
+    a = cli.build_loop(cfg, operator(), tmp_path).agents
+    names = ("strategist", "planner", "composer", "reviewer", "updater", "resolver")
+    assert [n for n in names if "- email: Sam from Paws and Co" in getattr(a, n).system_prompt] == list(names[:4])
+    assert "Not used" not in a.composer.system_prompt  # only the channels of this engagement
+    assert a.composer.system_prompt.endswith(cfg.angle.text)
+
+
+def test_without_roles_the_prompts_are_unchanged(models, tmp_path):
+    from pequod.agents import strategist
+
+    a = cli.build_loop(load(), operator(), tmp_path).agents
+    assert a.strategist.system_prompt == strategist.PROMPT
+
+
 def test_agents_get_only_the_engagement_channels(models, tmp_path):
     cfg = load(["~engagement.channels.sms"])
     loop = cli.build_loop(cfg, operator(), tmp_path)
@@ -221,3 +237,8 @@ def test_hub_is_opened_for_the_engagements_channels_only():
     live_but_sms_mock = load(["channels=live", "channels.sms.mode=mock", "~engagement.channels.sms"])
     assert cli.open_hub(live_but_sms_mock) is None
     assert cli.open_hub(load(["channels=live", "channels.sms.mode=mock"])) is not None
+
+
+def test_build_loop_tells_the_hub_which_channels_the_run_uses(models, tmp_path):
+    cli.build_loop(load(["~engagement.channels.sms"]), operator(), tmp_path / "run")
+    assert MockHub("runs/mock_hub.db").channels() == {"email": "alex@northwind.example", "whatsapp": "+00 000 000"}

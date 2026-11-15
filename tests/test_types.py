@@ -37,7 +37,7 @@ def test_path_starts_without_waves():
     "flags, expected",
     [
         ({}, False),
-        ({"root_problem_stated": True}, True),
+        ({"objective_met": True}, True),
         ({"solution_accepted": True}, True),
         ({"opt_out": True}, True),
     ],

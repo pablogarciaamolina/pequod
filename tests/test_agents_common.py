@@ -46,6 +46,14 @@ def test_every_output_type_has_a_description_for_the_model(output_type):
     assert convert_to_openai_tool(output_type)["function"]["description"].strip()
 
 
+LIMITS = "- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials."
+
+
+@pytest.mark.parametrize("name", [n for n in NAMES if n != "updater"])  # the Updater writes nothing to the persona
+def test_the_limits_are_in_the_prompt_of_every_agent_that_plans_or_writes(name):
+    assert importlib.import_module(f"pequod.agents.{name}").PROMPT.count(LIMITS) == 1
+
+
 @pytest.mark.parametrize("name", NAMES)
 def test_prompts_do_not_assume_read_receipts(name):
     assert "ignored" not in importlib.import_module(f"pequod.agents.{name}").PROMPT
