@@ -263,3 +263,34 @@ def test_a_status_that_cannot_be_written_does_not_stop_the_run(trace, monkeypatc
     assert "status" in caplog.text
     with pytest.raises(PermissionError):  # the report must not be lost silently
         trace.report("opt_out", Resolution(report="R"))
+
+
+# --- register off (Stage 6) ---
+
+
+def test_register_off_writes_only_a_status_without_text(tmp_path, graph):
+    trace = Trace(tmp_path / "run", register=False)
+    assert trace.snapshot(graph, 0) == "graph_0.json"
+    record = trace.record(1, PATHS, SENT, REPLIES, SIGNAL, "root_problem_stated")
+    trace.sent(SENT[0])
+    trace.received(REPLIES[0])
+    trace.report("root_problem_stated", Resolution(report="THE REPORT"))
+    trace.status("waiting", 1, 5, SENT)
+    assert record.wave == 1  # callers still get their record
+    assert [f.name for f in trace.folder.iterdir()] == ["status.json"]
+    text = (trace.folder / "status.json").read_text(encoding="utf-8")
+    assert "slowest" not in text
+    status = trace.read_status()
+    assert [(p.channel, p.send_at, p.text) for p in status.pending] == [("email", SENT[0].send_at, "")]
+    assert trace.records() == [] and trace.messages() == [] and trace.read_report() is None
+
+
+def test_register_off_fail_keeps_only_the_first_sentence(tmp_path):
+    trace = Trace(tmp_path / "run", register=False)
+    trace.fail("planner: no valid Paths after 4 model calls (limit 4). Last message: Alex said the sync is nightly")
+    assert trace.read_status().error == "planner: no valid Paths after 4 model calls (limit 4)."
+
+
+def test_register_on_fail_keeps_the_whole_error(trace):
+    trace.fail("planner: no valid Paths. Last message: text")
+    assert trace.read_status().error.endswith("Last message: text")

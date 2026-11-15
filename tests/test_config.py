@@ -9,7 +9,7 @@ from pequod.types import ChannelRules
 
 def test_default_config_composes():
     cfg = load()
-    assert set(cfg.run) == {"max_iterations", "max_paths", "max_waves", "reply_window_h", "command_poll_s"}
+    assert set(cfg.run) == {"max_iterations", "max_paths", "max_waves", "reply_window_h", "command_poll_s", "register"}
     assert cfg.engagement.persona.name == "Alex Carter"
     assert set(cfg.engagement.channels) == {"email", "sms", "whatsapp"}
     assert cfg.angle.name == "clarity"
@@ -69,3 +69,7 @@ def test_channel_rules_are_the_same_in_mock_and_live():
 
 def test_config_has_mock_hub():
     assert load().mock_hub.endswith("mock_hub.db")
+
+
+def test_register_is_on_by_default():
+    assert load().run.register is True

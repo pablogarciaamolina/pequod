@@ -54,7 +54,7 @@ Replies can be sent at any time, on any channel. The engine reads them at the st
 The run ends with a report for the supervisor when the client states the root problem, accepts a solution, opts out,
 when `run.max_iterations` is reached, or when you press `q`. The log of a run is saved in `runs/<time>/main.log`.
 
-Sent messages and replies are stored in `runs/mock_hub.db` (config key `mock_hub`). `channels=live` is not available yet.
+Sent messages and replies are stored in `runs/mock_hub.db` (config key `mock_hub`). For real platforms see "Live channels" below.
 
 ### Play it in the browser (simulator)
 
@@ -102,6 +102,56 @@ uv run pequod explain runs/2026-11-14_19-10-00
 ```
 
 This also works while the run is still in progress.
+
+### Live channels (real email, SMS, WhatsApp)
+
+With `channels=live` the engine sends real messages and reads real replies. Nothing else changes.
+
+**1. Accounts and `.env`.** Copy `.env.example` to `.env` and fill in only the channels you use:
+
+| Channel | You need | Variables in `.env` |
+|---|---|---|
+| Email | A Gmail account with 2-step verification and an app password (Google account → Security → App passwords) | `EMAIL_ADDRESS`, `EMAIL_APP_PASSWORD` |
+| SMS | A Twilio account and a Twilio phone number | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM` |
+| WhatsApp | The Twilio WhatsApp sandbox; the recipient first sends the sandbox's join code to Twilio's number | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` |
+
+Phone numbers are written with the country code, for example `+34600111222`.
+
+**2. Who receives the messages.** Open `configs/engagement/live_test.yaml` and replace the placeholder addresses by your own
+test addresses. Delete a channel you do not use. Do not commit this file with real addresses in it.
+The demo persona's addresses are placeholders; a live run with them stops before anything is sent.
+
+**3. Try one channel** (no model is used):
+
+```
+uv run pequod check email engagement=live_test            # sends one test message
+uv run pequod check email replies engagement=live_test    # lists the replies of the last 24 hours
+```
+
+**4. Run an engagement:**
+
+```
+uv run pequod channels=live engagement=live_test
+```
+
+Control it with the terminal keys (`s`, Enter, `q`). The simulator page is for mock channels only.
+
+Limits:
+- Replies are read when an iteration starts: after the reply window, or when you press Enter.
+- WhatsApp sandbox: free-text messages only reach the recipient within 24 hours after their last message to the sandbox.
+- Email replies must come from the address in the engagement file and arrive in the inbox of `EMAIL_ADDRESS`.
+- Mail servers other than Gmail: change `smtp_host`, `smtp_port` and `imap_host` in `configs/channels/live.yaml`.
+
+### Keeping no record of a run
+
+```
+uv run pequod run.register=false
+```
+
+With `run.register=false` (mock or live) the run folder gets no `trace.jsonl`, `messages.jsonl`, graph snapshots or `report.md`,
+and `main.log` keeps the engine's steps without the message texts and without the report. Everything is still shown in the
+terminal. `pequod explain` cannot explain such a run. Two things are still stored: the run's settings in `runs/<start time>/.hydra/`
+(they include the engagement file), and, in mock mode, the current run's messages in the mock hub until the next run starts.
 
 ## Test
 

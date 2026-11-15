@@ -41,7 +41,8 @@ def operator():
 
 
 def test_build_loop_builds_every_agent_with_its_config(models, tmp_path):
-    cfg = load(["agents.planner.model=ollama_qwen", "agents.updater.max_steps=6"])
+    others = [f"agents.{a}.model=claude" for a in ("strategist", "composer", "reviewer", "updater", "resolver")]
+    cfg = load(["agents.planner.model=ollama_qwen", "agents.updater.max_steps=6", *others])  # not the config's defaults
     loop = cli.build_loop(cfg, operator(), tmp_path)
     a = loop.agents
     assert [x.max_steps for x in (a.strategist, a.planner, a.composer, a.reviewer, a.updater, a.resolver)] == [4, 4, 4, 4, 6, 4]
@@ -63,9 +64,23 @@ def test_max_paths_larger_than_channels_raises(models, tmp_path):
         cli.build_loop(load(["run.max_paths=4"]), operator(), tmp_path)
 
 
-def test_live_channels_stop_at_startup(models, tmp_path):
-    with pytest.raises(NotImplementedError, match="Stage 6"):
+def test_live_run_with_the_demo_persona_stops_at_startup(models, tmp_path, monkeypatch):
+    for variable in ("EMAIL_ADDRESS", "EMAIL_APP_PASSWORD", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_SMS_FROM", "TWILIO_WHATSAPP_FROM"):
+        monkeypatch.setenv(variable, "set")
+    with pytest.raises(ValueError, match="placeholder"):
         cli.build_loop(load(["channels=live"]), operator(), tmp_path)
+
+
+def test_live_run_does_not_touch_the_hub(models, tmp_path, monkeypatch):
+    """The hub is the simulator's store: a live run neither clears it nor points it at itself."""
+    hub = MockHub("runs/mock_hub.db")
+    hub.start_run(tmp_path / "mock-run")
+    hub.add_reply("sms", "from the mock run", NOW)
+    monkeypatch.setattr(cli, "build_channels", lambda config, addresses, hub, clock: {})
+    loop = cli.build_loop(load(["channels=live"]), operator(), tmp_path / "live-run")
+    assert hub.run_folder() == tmp_path / "mock-run" and len(hub.replies("sms", NOW)) == 1
+    assert loop.channels == {} and cli.open_hub(load(["channels=live"])) is None
+    assert cli.open_hub(load()) is not None
 
 
 def test_run_end_to_end_with_fakes(models, caplog, tmp_path):
@@ -126,3 +141,83 @@ def test_ctrl_c_marks_the_run_as_failed(models, tmp_path, monkeypatch):
         cli.play(load(), operator(), tmp_path / "run")
     status = read_status(tmp_path / "run")
     assert status.phase == "failed" and "KeyboardInterrupt" in status.error
+
+
+def test_register_off_keeps_texts_out_of_the_log_file(models, tmp_path):
+    """The terminal still shows the messages; the log file of the run does not keep them."""
+    import io
+
+    file, console = tmp_path / "main.log", io.StringIO()
+    handlers = [logging.FileHandler(file, encoding="utf-8"), logging.StreamHandler(console)]
+    root = logging.getLogger()
+    level = root.level
+    root.setLevel(logging.INFO)
+    for handler in handlers:
+        root.addHandler(handler)
+    try:
+        assert cli.play(load(["run.max_iterations=1", "run.register=false"]), operator(), tmp_path / "run") == 0
+    finally:
+        for handler in handlers:
+            root.removeHandler(handler)
+            handler.close()
+        root.setLevel(level)
+    logged = file.read_text(encoding="utf-8")
+    assert "Iteration 1" in logged and "Stopped: max_iterations" in logged
+    assert all(secret not in logged for secret in ("which report is slowest", "THE REPORT", "Start from the stated symptom"))
+    assert "which report is slowest" in console.getvalue() and "THE REPORT" in console.getvalue()
+    assert sorted(f.name for f in (tmp_path / "run").iterdir()) == ["status.json"]
+
+
+def test_register_on_keeps_texts_in_the_log_file(models, tmp_path):
+    file = tmp_path / "main.log"
+    handler = logging.FileHandler(file, encoding="utf-8")
+    root = logging.getLogger()
+    level = root.level
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+    try:
+        cli.play(load(["run.max_iterations=1"]), operator(), tmp_path / "run")
+    finally:
+        root.removeHandler(handler)
+        handler.close()
+        root.setLevel(level)
+    assert "which report is slowest" in file.read_text(encoding="utf-8")
+
+
+def test_a_platform_error_stops_the_run_and_names_the_channel(models, tmp_path, monkeypatch, caplog):
+    from pequod.channels.base import ChannelError
+    from pequod.trace import Trace
+
+    class Broken:
+        rules = None
+
+        def fetch_replies(self, since):
+            raise ChannelError("email: could not read replies: OSError: network is unreachable")
+
+    monkeypatch.setattr(cli, "build_channels", lambda config, addresses, hub, clock: {"email": Broken()})
+    with caplog.at_level(logging.ERROR):
+        assert cli.play(load(), operator(), tmp_path / "run") == 1
+    status = Trace(tmp_path / "run").read_status()
+    assert status.phase == "failed" and status.error.startswith("email: could not read replies")
+    assert "Run stopped: email: could not read replies" in caplog.text
+
+
+def test_register_off_error_does_not_quote_a_library_message(tmp_path):
+    from pequod.agents.base import AgentError
+
+    try:
+        try:
+            raise ValueError("input_value='Hi Alex, your stock numbers'")
+        except ValueError as cause:
+            raise AgentError(f"planner: ValueError: {cause}") from cause
+    except AgentError as e:
+        assert cli.brief(e, register=False) == "planner: ValueError"
+        assert cli.brief(e, register=True) == str(e)
+    plain = AgentError("planner: no valid Paths after 4 model calls (limit 4). Last message: Alex said x")
+    assert cli.brief(plain, register=False) == "planner: no valid Paths after 4 model calls (limit 4)."
+
+
+def test_hub_is_opened_for_the_engagements_channels_only():
+    live_but_sms_mock = load(["channels=live", "channels.sms.mode=mock", "~engagement.channels.sms"])
+    assert cli.open_hub(live_but_sms_mock) is None
+    assert cli.open_hub(load(["channels=live", "channels.sms.mode=mock"])) is not None

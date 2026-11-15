@@ -45,16 +45,17 @@ def test_fetch_replies_reads_only_its_channel(hub, rules):
 
 
 def test_build_channels_uses_the_engagement_channels(cfg, hub, rules):
-    channels = build_channels(cfg.channels, ["email", "sms"], hub, clock)
+    channels = build_channels(cfg.channels, {"email": "a", "sms": "b"}, hub, clock)
     assert {name: type(c) for name, c in channels.items()} == {"email": EmailMock, "sms": SmsMock}
     assert channels["sms"].rules == rules["sms"]
 
 
 def test_build_channels_unknown_channel_raises(cfg, hub):
     with pytest.raises(ValueError, match="fax"):
-        build_channels(cfg.channels, ["email", "fax"], hub, clock)
+        build_channels(cfg.channels, {"email": "a", "fax": "b"}, hub, clock)
 
 
-def test_live_mode_stops_with_a_stage_6_message(hub):
-    with pytest.raises(NotImplementedError, match="Stage 6"):
-        build_channels(load(["channels=live"]).channels, ["email"], hub, clock)
+def test_live_mode_with_the_demo_persona_stops_before_anything_is_built(hub):
+    live = load(["channels=live"]).channels
+    with pytest.raises(ValueError, match="EMAIL_ADDRESS"):
+        build_channels(live, {"email": "alex@northwind.example"}, hub, clock, {})

@@ -25,7 +25,7 @@ def hub(tmp_path):
 
 def scheduler(cfg, hub, clock, script=(), window=24):
     operator = FakeOperator(clock, script)
-    channels = build_channels(cfg.channels, ["email", "sms", "whatsapp"], hub, clock)
+    channels = build_channels(cfg.channels, dict.fromkeys(["email", "sms", "whatsapp"], "x"), hub, clock)
     return Scheduler(channels, operator, window, clock), operator
 
 
@@ -165,7 +165,7 @@ def test_operator_clear_drops_hub_commands_too(hub):
 def test_scheduler_reports_each_send_with_its_real_time(cfg, hub):
     clock = Clock()
     operator = FakeOperator(clock, ["send", "ok"])
-    channels = build_channels(cfg.channels, ["email", "sms", "whatsapp"], hub, clock)
+    channels = build_channels(cfg.channels, dict.fromkeys(["email", "sms", "whatsapp"], "x"), hub, clock)
     seen = []
     Scheduler(channels, operator, 24, clock, on_send=seen.append).run([at(10), at(12, "sms")])
     assert [(i.channel, i.send_at) for i in seen] == [("email", NOW), ("sms", NOW)]

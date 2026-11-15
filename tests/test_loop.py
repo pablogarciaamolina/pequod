@@ -32,11 +32,12 @@ def signal(**flags):
 class World:
     """A loop on fake models, a real hub in a temp folder, a fake clock and a scripted operator."""
 
-    def __init__(self, tmp_path, cfg, graph, catalog, rules, updater, operator=(), iterations=1, max_iterations=5, planner=None):
+    def __init__(self, tmp_path, cfg, graph, catalog, rules, updater, operator=(), iterations=1, max_iterations=5,
+                 planner=None, register=True):
         self.clock = Clock()
         self.hub = MockHub(tmp_path / "hub.db")
         self.operator = FakeOperator(self.clock, operator)
-        channels = build_channels(cfg.channels, list(rules), self.hub, self.clock)
+        channels = build_channels(cfg.channels, dict.fromkeys(rules, "x"), self.hub, self.clock)
         self.models = {
             "strategist": fake(*[STRATEGIST] * iterations),
             "planner": fake(*(planner or [PLANNER] * iterations)),
@@ -54,7 +55,7 @@ class World:
             updater=Updater(m["updater"], graph, 8),
             resolver=Resolver(m["resolver"], graph, 4, ANGLE),
         )
-        self.trace = Trace(tmp_path / "run")
+        self.trace = Trace(tmp_path / "run", register)
         scheduler = Scheduler(channels, self.operator, 24, self.clock, on_send=self.trace.sent)
         self.loop = EngagementLoop(
             "Find the problem", agents, channels, scheduler, max_iterations, self.clock, graph, self.trace
@@ -281,3 +282,17 @@ def test_messages_are_registered_even_if_the_updater_fails(world):
     with pytest.raises(AgentError, match="updater"):
         w.loop.run()
     assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "email"), ("out", "whatsapp"), ("in", "sms")]
+
+
+# --- register off (Stage 6) ---
+
+
+def test_register_off_run_leaves_no_text_in_the_folder(world):
+    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)], register=False)
+    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    state = w.loop.run()
+    assert state["reason"] == "root_problem_stated" and state["resolution"].report == "THE REPORT"
+    assert w.files() == ["status.json"]
+    text = (w.trace.folder / "status.json").read_text(encoding="utf-8")
+    assert all(secret not in text for secret in (CAUSE, "which report is slowest", "THE REPORT"))
+    assert w.trace.read_status().phase == "finished"
