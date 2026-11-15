@@ -83,6 +83,8 @@ def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> Engag
             return models[label]
 
     
+    hub = MockHub(to_absolute_path(cfg.mock_hub))  # relative to the start folder, like `pequod reply`
+    hub.start_run(folder)  # first: the simulator shows this run from now on, also if it fails right below
     engagement = Engagement.model_validate(OmegaConf.to_container(cfg.engagement, resolve=True))
     run, angle = cfg.run, cfg.angle.text
     if run.max_paths > len(engagement.channels):
@@ -90,7 +92,6 @@ def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> Engag
             f"run.max_paths is {run.max_paths} but the engagement has {len(engagement.channels)} channels; "
             "each path needs its own channel"
         )
-    hub = MockHub(to_absolute_path(cfg.mock_hub))  # relative to the start folder, like `pequod reply`
     channels = build_channels(cfg.channels, engagement.channels, hub, now)
     rules = {name: channel.rules for name, channel in channels.items()}
     graph = KnowledgeGraph.from_engagement(engagement)
@@ -107,20 +108,30 @@ def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> Engag
         updater=Updater(model("updater"), graph, steps["updater"]),
         resolver=Resolver(model("resolver"), graph, steps["resolver"], angle),
     )
-    scheduler = Scheduler(channels, operator, run.reply_window_h, now)
-    return EngagementLoop(
-        engagement.objective, agents, channels, scheduler, run.max_iterations, now, graph, Trace(folder)
-    )
+    trace = Trace(folder)
+    scheduler = Scheduler(channels, operator, run.reply_window_h, now, on_send=trace.sent)
+    return EngagementLoop(engagement.objective, agents, channels, scheduler, run.max_iterations, now, graph, trace)
 
 
 @hydra.main(version_base=None, config_path=CONFIGS, config_name="config")
 def run(cfg: DictConfig) -> None:
     load_dotenv()  # API keys and credentials from .env
+    operator = Operator(hub=MockHub(to_absolute_path(cfg.mock_hub)), poll_s=cfg.run.command_poll_s)
+    sys.exit(play(cfg, operator, HydraConfig.get().runtime.output_dir))
+
+
+def play(cfg: DictConfig, operator: Operator, folder: str | Path) -> int:
+    """One run. Returns the exit code. However the run ends, its status says so (the simulator reads it)."""
     try:
-        build_loop(cfg, Operator(), HydraConfig.get().runtime.output_dir).run()
+        build_loop(cfg, operator, folder).run()
     except (AgentError, ValueError, NotImplementedError) as e:
+        Trace(folder).fail(str(e))
         log.error("Run stopped: %s", e, exc_info=e.__cause__ is not None)  # traceback for unexpected causes
-        sys.exit(1)
+        return 1
+    except BaseException as e:  # Ctrl+C or a bug: mark the run, then let it surface
+        Trace(folder).fail(f"{type(e).__name__}: {e}".rstrip(": "))
+        raise
+    return 0
 
 
 def main() -> None:

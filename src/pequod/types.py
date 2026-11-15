@@ -104,11 +104,32 @@ class Resolution(BaseModel):
 
 # --- trace ---
 
+class Message(BaseModel):
+    """One message of a conversation, in full: sent by the engine ("out") or received from the client ("in")."""
+
+    direction: Literal["out", "in"]
+    channel: str
+    at: AwareDatetime
+    body: str
+    subject: str | None = None
+    payload: dict[str, str] | None = None
+
+
 class SentLine(BaseModel):
     channel: str
     send_at: AwareDatetime  # when it really went out
     text: str  # first 80 characters of the body
     cut: bool  # True when the body was longer
+
+
+class Status(BaseModel):
+    """What the engine is doing right now (status.json)."""
+
+    phase: str  # updating, planning, writing, waiting, reporting, finished, failed
+    wave: int = 0
+    max_iterations: int = 0
+    pending: list[SentLine] = []  # planned for this wave, while waiting
+    error: str = ""
 
 
 class WaveRecord(BaseModel):
