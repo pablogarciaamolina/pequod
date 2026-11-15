@@ -184,3 +184,82 @@ def test_card_keeps_quotes_and_line_breaks_inside_one_line(trace):
     card = trace.explain().split("\n\nOutcome")[0]
     assert len(card.splitlines()) == 9  # the fixed layout: no text spills onto extra lines
     assert r'"He said \"no\"\nline2"' in card and r'"Hi,\nAlex"' in card and r'· "\"stop\""' in card
+
+
+# --- status and the message register (Stage 5) ---
+
+from pequod.types import Message, Status
+
+
+def test_read_status_without_file_is_none(trace):
+    assert trace.read_status() is None
+
+
+def test_status_round_trip(trace):
+    trace.status("waiting", 2, 5, [LONG, SENT[0]])
+    status = trace.read_status()
+    assert type(status) is Status
+    assert (status.phase, status.wave, status.max_iterations, status.error) == ("waiting", 2, 5, "")
+    assert [(p.channel, len(p.text), p.cut) for p in status.pending] == [("email", 80, True), ("email", 33, False)]
+
+
+def test_status_is_replaced_not_appended(trace):
+    trace.status("planning", 1, 5)
+    trace.status("writing", 1, 5)
+    assert trace.read_status().phase == "writing"
+
+
+def test_fail_without_an_earlier_status(trace):
+    trace.fail("boom")
+    assert (trace.read_status().phase, trace.read_status().error) == ("failed", "boom")
+
+
+def test_no_temporary_file_is_left(trace):
+    trace.status("planning", 1, 5)
+    trace.report("opt_out", Resolution(report="R"))
+    assert sorted(f.name for f in trace.folder.iterdir()) == ["report.md", "status.json"]
+
+
+def test_read_report(trace):
+    assert trace.read_report() is None
+    trace.report("opt_out", Resolution(report="R"))
+    assert trace.read_report() == "Stop reason: opt_out\n\nR"
+
+
+def test_sent_and_received_are_registered_in_full(trace):
+    long = I(**interaction("email", "x" * 200), subject="S", payload={"url": "https://kb.example/erp-sync"})
+    trace.sent(long)
+    trace.received(REPLIES[0])
+    out, back = trace.messages()
+    assert all(type(m) is Message for m in (out, back))
+    assert (out.direction, out.channel, out.at, out.body, out.subject, out.payload) == (
+        "out", "email", long.send_at, "x" * 200, "S", long.payload,
+    )
+    assert (back.direction, back.channel, back.at, back.body) == ("in", "whatsapp", NOW, REPLIES[0].body)
+    assert (trace.folder / "messages.jsonl").read_bytes().count(b"\n") == 2
+
+
+def test_messages_of_a_folder_without_register_is_empty(trace):
+    assert trace.messages() == []
+
+
+def test_fail_keeps_the_wave(trace):
+    trace.status("planning", 2, 5)
+    trace.fail("planner: no valid Paths")
+    status = trace.read_status()
+    assert (status.phase, status.wave, status.error) == ("failed", 2, "planner: no valid Paths")
+
+
+def test_a_status_that_cannot_be_written_does_not_stop_the_run(trace, monkeypatch, caplog):
+    """status.json is only for display."""
+    import os
+
+    def locked(*args):
+        raise PermissionError("in use")
+
+    monkeypatch.setattr(os, "replace", locked)
+    monkeypatch.setattr("pequod.trace.time.sleep", lambda seconds: None)
+    trace.status("planning", 1, 5)
+    assert "status" in caplog.text
+    with pytest.raises(PermissionError):  # the report must not be lost silently
+        trace.report("opt_out", Resolution(report="R"))

@@ -59,3 +59,84 @@ def test_creates_the_folder(tmp_path):
 def test_time_without_a_timezone_is_rejected(hub):
     with pytest.raises(ValueError, match="timezone"):
         hub.add_reply("sms", "ok", NOW.replace(tzinfo=None))
+
+
+# --- simulator support: run start, operator commands, conversation (Stage 5) ---
+
+import sqlite3
+
+from pequod.types import Message
+
+
+def test_run_folder_is_none_before_any_run(hub):
+    assert hub.run_folder() is None
+
+
+def test_start_run_clears_messages_and_commands_and_stores_the_folder(hub, tmp_path):
+    hub.add_sent(Interaction(**interaction("sms")), NOW)
+    hub.add_reply("sms", "old reply", NOW)
+    hub.add_command("send")
+    hub.start_run(tmp_path / "runs" / "one")
+    assert hub.sent() == [] and hub.replies("sms", NOW) == [] and hub.take_commands() == []
+    assert hub.run_folder() == tmp_path / "runs" / "one"
+    hub.start_run(tmp_path / "runs" / "two")
+    assert hub.run_folder() == tmp_path / "runs" / "two"
+
+
+def test_commands_are_taken_once_in_order(hub):
+    hub.add_command("send")
+    hub.add_command("ok")
+    assert hub.take_commands() == ["send", "ok"]
+    assert hub.take_commands() == []
+
+
+def test_unknown_command_is_rejected(hub):
+    with pytest.raises(ValueError, match="send, ok, stop"):
+        hub.add_command("explode")
+    assert hub.take_commands() == []
+
+
+def test_conversation_has_both_directions_in_order(hub):
+    first = Interaction(**interaction("email"), subject="Reports", payload={"url": "https://kb.example/erp-sync"})
+    hub.add_sent(first, NOW)
+    hub.add_reply("email", "Which reports?", NOW + timedelta(minutes=5))
+    hub.add_sent(Interaction(**interaction("email", "The weekly ones.")), NOW + timedelta(minutes=9))
+    hub.add_reply("sms", "other channel", NOW)
+    talk = hub.conversation("email")
+    assert all(type(m) is Message for m in talk)
+    assert [(m.direction, m.body) for m in talk] == [
+        ("out", first.body), ("in", "Which reports?"), ("out", "The weekly ones."),
+    ]
+    assert (talk[0].subject, talk[0].payload, talk[0].at) == ("Reports", first.payload, NOW)
+    assert (talk[1].subject, talk[1].payload) == (None, None)
+
+
+def test_existing_hub_file_from_an_older_version_still_opens(tmp_path):
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, direction TEXT, channel TEXT, at TEXT, "
+                   "body TEXT, subject TEXT, payload TEXT)")
+    db.close()
+    hub = MockHub(path)
+    hub.add_command("ok")
+    hub.start_run(tmp_path)
+    assert hub.run_folder() == tmp_path
+
+
+def test_two_callers_never_take_the_same_command(hub):
+    """The engine's poller and clear() can ask at the same moment."""
+    import threading
+
+    for _ in range(30):
+        for command in ("send", "ok", "stop", "send", "ok"):
+            hub.add_command(command)
+        barrier, taken = threading.Barrier(2), []
+
+        def take():
+            barrier.wait()
+            taken.extend(hub.take_commands())
+
+        threads = [threading.Thread(target=take) for _ in range(2)]
+        [t.start() for t in threads]
+        [t.join() for t in threads]
+        assert sorted(taken) == ["ok", "ok", "send", "send", "stop"]

@@ -54,8 +54,8 @@ class World:
             updater=Updater(m["updater"], graph, 8),
             resolver=Resolver(m["resolver"], graph, 4, ANGLE),
         )
-        scheduler = Scheduler(channels, self.operator, 24, self.clock)
         self.trace = Trace(tmp_path / "run")
+        scheduler = Scheduler(channels, self.operator, 24, self.clock, on_send=self.trace.sent)
         self.loop = EngagementLoop(
             "Find the problem", agents, channels, scheduler, max_iterations, self.clock, graph, self.trace
         )
@@ -181,7 +181,7 @@ def test_engaged_run_leaves_trace_snapshots_and_report(world):
     w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)])
     w.operator.script = [w.reply("whatsapp", CAUSE)]
     w.loop.run()
-    assert w.files() == ["graph_0.json", "graph_1.json", "report.md", "trace.jsonl"]
+    assert w.files() == ["graph_0.json", "graph_1.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
     (record,) = w.trace.records()
     assert (record.wave, record.snapshot, record.reason) == (1, "graph_0.json", "root_problem_stated")
     assert [i.channel for i in record.interactions] == ["email", "whatsapp"]
@@ -195,7 +195,7 @@ def test_engaged_run_leaves_trace_snapshots_and_report(world):
 def test_each_wave_gets_a_line_and_a_snapshot(world):
     w = world(updater=[signal(), signal()], iterations=2, max_iterations=2)
     w.loop.run()
-    assert w.files() == ["graph_0.json", "graph_1.json", "graph_2.json", "report.md", "trace.jsonl"]
+    assert w.files() == ["graph_0.json", "graph_1.json", "graph_2.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
     assert [(r.wave, r.snapshot, r.reason) for r in w.trace.records()] == [
         (1, "graph_0.json", None),
         (2, "graph_1.json", "max_iterations"),
@@ -236,7 +236,48 @@ def test_trace_survives_a_crash(world):
     w = world(updater=[signal()], iterations=2, planner=planner)
     with pytest.raises(AgentError, match="planner"):
         w.loop.run()
-    assert w.files() == ["graph_0.json", "graph_1.json", "trace.jsonl"]
+    assert w.files() == ["graph_0.json", "graph_1.json", "messages.jsonl", "status.json", "trace.jsonl"]
     assert [r.wave for r in w.trace.records()] == [1]
     text = w.trace.explain()
     assert "Wave 1" in text and "Wave 2" not in text and "No report" in text
+
+
+# --- status and message register (Stage 5) ---
+
+
+def test_loop_reports_its_phases(world, monkeypatch):
+    w = world(updater=[signal()], max_iterations=1)
+    phases = []
+    real = w.trace.status
+    monkeypatch.setattr(w.trace, "status", lambda phase, *a, **k: (phases.append(phase), real(phase, *a, **k)))
+    w.loop.run()
+    assert phases == ["updating", "planning", "writing", "waiting", "updating", "reporting", "finished"]
+    status = w.trace.read_status()
+    assert (status.phase, status.wave, status.max_iterations) == ("finished", 1, 1)
+
+
+def test_waiting_status_lists_the_pending_messages(world):
+    w = world(updater=[], operator=["stop"])
+    seen = []
+    w.operator.script = [lambda: seen.append(w.trace.read_status()), "stop"]
+    w.loop.run()
+    assert seen[0].phase == "waiting" and seen[0].wave == 1
+    assert [p.channel for p in seen[0].pending] == ["email", "whatsapp"]
+
+
+def test_run_registers_every_message_in_full(world):
+    w = world(updater=[signal(root_problem_stated=True, evidence=CAUSE)])
+    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    w.loop.run()
+    assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "email"), ("out", "whatsapp"), ("in", "whatsapp")]
+    assert w.trace.messages()[-1].body == CAUSE
+
+
+def test_messages_are_registered_even_if_the_updater_fails(world):
+    from langchain_core.messages import AIMessage
+
+    w = world(updater=[AIMessage("no idea") for _ in range(8)])
+    w.operator.script = [w.reply("sms", "hello?")]
+    with pytest.raises(AgentError, match="updater"):
+        w.loop.run()
+    assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "email"), ("out", "whatsapp"), ("in", "sms")]

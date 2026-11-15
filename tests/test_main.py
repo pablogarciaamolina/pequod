@@ -1,7 +1,7 @@
 import logging
 
 import pytest
-from conftest import Clock, FakeOperator, call, fake, interaction, load, path, wave
+from conftest import NOW, Clock, FakeOperator, call, fake, interaction, load, path, wave
 
 from pequod import main as cli
 from pequod.channels.mock_hub import MockHub
@@ -76,4 +76,53 @@ def test_run_end_to_end_with_fakes(models, caplog, tmp_path):
     assert [m["channel"] for m in MockHub("runs/mock_hub.db").sent()] == ["email", "whatsapp"]
     assert "SENT on email" in caplog.text and "THE REPORT" in caplog.text
     files = sorted(f.name for f in (tmp_path / "run").iterdir())
-    assert files == ["graph_0.json", "graph_1.json", "report.md", "trace.jsonl"]
+    assert files == ["graph_0.json", "graph_1.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
+
+
+def test_build_loop_starts_a_clean_run(models, tmp_path):
+    hub = MockHub("runs/mock_hub.db")
+    hub.add_reply("sms", "from the last run", NOW)
+    hub.add_command("ok")
+    cli.build_loop(load(), operator(), tmp_path / "run")
+    assert hub.replies("sms", NOW) == [] and hub.take_commands() == []
+    assert hub.run_folder() == tmp_path / "run"
+
+
+def read_status(folder):
+    from pequod.trace import Trace
+
+    return Trace(folder).read_status()
+
+
+def test_play_returns_0_and_finishes(models, tmp_path):
+    assert cli.play(load(["run.max_iterations=1"]), operator(), tmp_path / "run") == 0
+    assert read_status(tmp_path / "run").phase == "finished"
+
+
+def test_a_failing_agent_marks_the_run_as_failed(monkeypatch, tmp_path):
+    from langchain_core.messages import AIMessage
+
+    monkeypatch.setattr(cli, "build_named", lambda *_: fake(*[AIMessage("no") for _ in range(4)]))
+    assert cli.play(load(), operator(), tmp_path / "run") == 1
+    status = read_status(tmp_path / "run")
+    assert status.phase == "failed" and "strategist" in status.error and status.wave == 1
+
+
+def test_a_config_error_is_shown_by_the_simulator(models, tmp_path):
+    """The hub must point at the new run even when it fails before it starts."""
+    MockHub("runs/mock_hub.db").start_run(tmp_path / "previous")
+    assert cli.play(load(["run.max_paths=4"]), operator(), tmp_path / "run") == 1
+    assert MockHub("runs/mock_hub.db").run_folder() == tmp_path / "run"
+    status = read_status(tmp_path / "run")
+    assert status.phase == "failed" and "max_paths" in status.error
+
+
+def test_ctrl_c_marks_the_run_as_failed(models, tmp_path, monkeypatch):
+    def interrupted(*args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "build_loop", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        cli.play(load(), operator(), tmp_path / "run")
+    status = read_status(tmp_path / "run")
+    assert status.phase == "failed" and "KeyboardInterrupt" in status.error

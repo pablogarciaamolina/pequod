@@ -139,3 +139,72 @@ def test_operator_clear_drops_lines_typed_earlier():
     operator = typed("\n\n")
     operator.clear()
     assert operator.wait(0.01) is None
+
+
+# --- commands from the simulator's buttons (Stage 5) ---
+
+
+def test_operator_returns_a_command_from_the_hub(hub):
+    hub.add_command("send")
+    assert Operator(io.StringIO(""), hub, poll_s=0.05).wait(5) == "send"
+    assert hub.take_commands() == []
+
+
+def test_keyboard_still_works_with_a_hub(hub):
+    assert Operator(io.StringIO("q\n"), hub, poll_s=0.05).wait(5) == "stop"
+
+
+def test_operator_clear_drops_hub_commands_too(hub):
+    operator = Operator(io.StringIO(""), hub, poll_s=3600)  # the poller sleeps: the command is still in the hub
+    time.sleep(0.05)
+    hub.add_command("ok")
+    operator.clear()
+    assert hub.take_commands() == [] and operator.wait(0.05) is None
+
+
+def test_scheduler_reports_each_send_with_its_real_time(cfg, hub):
+    clock = Clock()
+    operator = FakeOperator(clock, ["send", "ok"])
+    channels = build_channels(cfg.channels, ["email", "sms", "whatsapp"], hub, clock)
+    seen = []
+    Scheduler(channels, operator, 24, clock, on_send=seen.append).run([at(10), at(12, "sms")])
+    assert [(i.channel, i.send_at) for i in seen] == [("email", NOW), ("sms", NOW)]
+
+
+def test_clear_waits_for_a_command_the_poller_is_just_taking():
+    """A click taken from the hub but not yet queued must not slip past clear()."""
+    import threading
+
+    class SlowHub:
+        def __init__(self):
+            self.taking, self.release, self.calls = threading.Event(), threading.Event(), 0
+
+        def take_commands(self):
+            self.calls += 1
+            if self.calls > 1:
+                return []
+            self.taking.set()
+            self.release.wait(5)
+            return ["ok"]
+
+    hub = SlowHub()
+    operator = Operator(io.StringIO(""), hub, poll_s=3600)
+    assert hub.taking.wait(5)
+    threading.Timer(0.1, hub.release.set).start()
+    operator.clear()
+    assert operator.wait(0.2) is None
+
+
+def test_poller_survives_a_hub_error():
+    import sqlite3
+
+    class FlakyHub:
+        calls = 0
+
+        def take_commands(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise sqlite3.OperationalError("database is locked")
+            return ["send"] if self.calls == 2 else []
+
+    assert Operator(io.StringIO(""), FlakyHub(), poll_s=0.05).wait(5) == "send"

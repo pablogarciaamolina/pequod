@@ -56,6 +56,32 @@ when `run.max_iterations` is reached, or when you press `q`. The log of a run is
 
 Sent messages and replies are stored in `runs/mock_hub.db` (config key `mock_hub`). `channels=live` is not available yet.
 
+### Play it in the browser (simulator)
+
+The simulator is a page where you play the client and follow the engine. It is a separate program (`src/pequod_sim/`);
+the engine runs the same way with or without it.
+
+Start both in the repository folder, each in its own terminal:
+
+```
+uv run pequod-sim        # then open http://127.0.0.1:8000
+uv run pequod            # the engine; add overrides as above
+```
+
+| Part of the page | What it does |
+|---|---|
+| Left: channels | Pick email, SMS or WhatsApp. A number shows messages you have not looked at yet. |
+| Middle: conversation | The engine's messages on that channel. Type a reply as the client and press Enter. |
+| Right: engine | What the engine is doing now, one card per finished wave, and the final report. |
+
+The three buttons do the same as the terminal keys and are active while the engine waits:
+"Send now" (`s`), "Next iteration" (Enter), "Stop" (`q`).
+
+Notes:
+- A new run empties the inboxes. Older runs stay in their `runs/<start time>/` folder.
+- The page only shows mock channels. Its settings are in `configs/sim.yaml` (host, port, refresh time).
+- The server listens on this machine only and has no login.
+
 ### Explain a run
 
 Every run writes its record into its own folder, `runs/<start time>/`:
@@ -63,6 +89,8 @@ Every run writes its record into its own folder, `runs/<start time>/`:
 | File | Content |
 |---|---|
 | `trace.jsonl` | one line per wave: the paths, what was sent, the replies absorbed, the stop signal, the decision |
+| `messages.jsonl` | every message sent and every reply received, in full, in the order they happened |
+| `status.json` | what the engine is doing right now (read by the simulator) |
 | `graph_0.json`, `graph_1.json`, ... | the knowledge graph over time. `graph_0` is the start; `graph_<n>` is the graph after the replies of wave n were absorbed. Wave n was planned from `graph_<n-1>`. |
 | `report.md` | the final report for the supervisor, with the stop reason on the first line |
 | `main.log`, `.hydra/` | the log and the full config of the run (written by Hydra) |

@@ -9,7 +9,7 @@ from pequod.types import ChannelRules
 
 def test_default_config_composes():
     cfg = load()
-    assert set(cfg.run) == {"max_iterations", "max_paths", "max_waves", "reply_window_h"}
+    assert set(cfg.run) == {"max_iterations", "max_paths", "max_waves", "reply_window_h", "command_poll_s"}
     assert cfg.engagement.persona.name == "Alex Carter"
     assert set(cfg.engagement.channels) == {"email", "sms", "whatsapp"}
     assert cfg.angle.name == "clarity"
