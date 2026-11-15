@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pequod simulator</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --line: #e2e5ea; --ink: #1c2330; --soft: #667085;
+    --accent: #2f5bea; --accent-ink: #ffffff; --ok: #1a7f4b; --warn: #b54708; --bad: #b42318;
+    --out: #eef1f6; --in: #dbe6ff; --wa-out: #ffffff; --wa-in: #d9fdd3; --wa-bg: #efeae2;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  button { font: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .45; }
+
+  .app { display: grid; grid-template-columns: 210px minmax(0, 1fr) 400px; height: 100vh; }
+  .side, .panel { background: var(--panel); overflow-y: auto; }
+  .side { border-right: 1px solid var(--line); padding: 16px 10px; }
+  .panel { border-left: 1px solid var(--line); padding: 16px; }
+  .brand { font-weight: 700; font-size: 17px; padding: 0 8px 2px; }
+  .brand small { display: block; font-weight: 400; font-size: 12px; color: var(--soft); }
+  .label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--soft); margin: 18px 8px 6px; }
+
+  .channel { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; margin-bottom: 2px;
+             border: 0; border-radius: 8px; background: none; text-align: left; color: var(--ink); }
+  .channel:hover { background: var(--bg); }
+  .channel.selected { background: var(--in); font-weight: 600; }
+  .channel .name { flex: 1; }
+  .channel .address { display: block; font-size: 11px; font-weight: 400; color: var(--soft); }
+  .badge { min-width: 20px; padding: 1px 6px; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
+           font-size: 11px; font-weight: 600; text-align: center; }
+
+  .talk { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+  .talk header { padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .talk header b { font-size: 16px; }
+  .talk header span { color: var(--soft); margin-left: 8px; }
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .messages.whatsapp { background: var(--wa-bg); }
+  .empty { margin: auto; color: var(--soft); text-align: center; max-width: 340px; }
+
+  .bubble { max-width: 72%; padding: 8px 12px; border-radius: 14px; background: var(--out); align-self: flex-start;
+            white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble.in { align-self: flex-end; background: var(--in); }
+  .whatsapp .bubble { background: var(--wa-out); border-radius: 8px; box-shadow: 0 1px 1px rgba(0,0,0,.08); }
+  .whatsapp .bubble.in { background: var(--wa-in); }
+  .mail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px;
+          white-space: pre-wrap; overflow-wrap: anywhere; }
+  .mail.in { border-color: #b9ccff; background: #f5f8ff; }
+  .mail .head { display: flex; justify-content: space-between; gap: 12px; color: var(--soft); font-size: 12px; white-space: normal; }
+  .mail .subject { font-weight: 600; margin: 4px 0 8px; white-space: normal; }
+  .who { font-size: 11px; color: var(--soft); margin-bottom: 2px; }
+  .time { display: block; margin-top: 4px; font-size: 11px; color: var(--soft); text-align: right; }
+  .link { display: block; margin-top: 6px; font-size: 12px; color: var(--accent); }
+
+  .reply { display: flex; gap: 10px; padding: 12px 20px; background: var(--panel); border-top: 1px solid var(--line); }
+  .reply textarea { flex: 1; resize: none; height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+                    font: inherit; color: inherit; }
+  .reply textarea:focus { outline: 2px solid var(--in); border-color: var(--accent); }
+  .primary { padding: 0 18px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+  .panel h2 { margin: 0 0 10px; font-size: 16px; }
+  .status { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .status .phase { font-weight: 600; }
+  .status .phase::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; background: var(--soft); }
+  .status.busy .phase::before { background: var(--warn); animation: pulse 1.2s infinite; }
+  .status.waiting .phase::before { background: var(--accent); }
+  .status.finished .phase::before { background: var(--ok); }
+  .status.failed .phase::before { background: var(--bad); }
+  .status .hint, .status .error { margin-top: 6px; font-size: 12px; color: var(--soft); overflow-wrap: anywhere; }
+  .status .error { color: var(--bad); }
+  .status ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--soft); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .offline { margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; background: #fde8e6; color: var(--bad); font-size: 12px; }
+
+  .controls { display: flex; gap: 8px; margin: 10px 0 18px; }
+  .controls button { flex: 1; padding: 8px 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
+  .controls button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+  .controls .stop:not(:disabled):hover { border-color: var(--bad); color: var(--bad); }
+
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 2px; font-size: 14px; }
+  .card .from { font-size: 11px; color: var(--soft); }
+  .card h4 { margin: 10px 0 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--soft); }
+  .card ul { margin: 0; padding-left: 18px; }
+  .card li { margin-bottom: 3px; overflow-wrap: anywhere; }
+  .card .none { color: var(--soft); }
+  .card .meta { color: var(--soft); font-size: 12px; }
+  .decision { display: inline-block; margin-top: 10px; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;
+              background: var(--bg); color: var(--soft); }
+  .decision.stop { background: #fde8e6; color: var(--bad); }
+  .report { border: 1px solid #b7e0c7; background: #f1faf4; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
+            white-space: pre-wrap; overflow-wrap: anywhere; }
+  .report h3 { margin: 0 0 6px; font-size: 14px; color: var(--ok); }
+  .folder { margin-top: 14px; font-size: 11px; color: var(--soft); overflow-wrap: anywhere; }
+
+  @media (max-width: 1000px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    .side, .panel { border: 0; border-bottom: 1px solid var(--line); }
+    .talk { height: 70vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side">
+    <div class="brand">Pequod <small>simulator: you are the client</small></div>
+    <div class="label">Channels</div>
+    <div id="channels"></div>
+  </nav>
+
+  <main class="talk">
+    <header><b id="title"></b><span id="address"></span></header>
+    <div class="messages" id="messages"></div>
+    <form class="reply" id="reply">
+      <textarea id="text" placeholder="Reply as the client" aria-label="Reply as the client"></textarea>
+      <button class="primary" type="submit">Send</button>
+    </form>
+  </main>
+
+  <aside class="panel">
+    <h2>Engine</h2>
+    <div class="offline" id="offline" hidden>The simulator's server does not answer. What you see may be out of date.</div>
+    <div class="status" id="status"></div>
+    <div class="controls">
+      <button data-command="send" title="Send all pending messages now, without waiting for their planned time">Send now</button>
+      <button data-command="ok" title="Stop waiting for replies and plan the next iteration. Messages not sent yet are dropped.">Next iteration</button>
+      <button data-command="stop" class="stop" title="Stop the engagement. The final report is still written.">Stop</button>
+    </div>
+    <div id="progress"></div>
+  </aside>
+</div>
+
+<script>
+"use strict";
+// Every text that comes from a model or from a reply is inserted with textContent, never as HTML.
+
+const NAMES = { email: "Email", sms: "SMS", whatsapp: "WhatsApp" };
+const PHASES = {
+  updating: "reading replies and updating the graph",
+  planning: "planning the paths",
+  writing: "writing and reviewing the messages",
+  waiting: "waiting",
+  reporting: "writing the final report",
+  finished: "finished",
+  failed: "stopped by an error",
+};
+const FLAGS = ["root_problem_stated", "solution_accepted", "opt_out"];
+
+let state = null;      // last answer of /api/state
+let selected = null;   // name of the channel shown
+let seen = {};         // channel -> number of engine messages already looked at
+let drawn = {};        // part of the page -> JSON it was last drawn from (redraw only on change)
+let run = null;        // folder of the run on screen; a new run resets `seen`
+let drafts = {};       // channel -> reply typed but not sent
+let online = true;     // false while the simulator's server does not answer
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+function time(iso) {
+  return new Date(iso).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+function changed(part, data) {
+  const json = JSON.stringify(data);
+  if (drawn[part] === json) return false;
+  drawn[part] = json;
+  return true;
+}
+function channel() { return state.channels.find(c => c.name === selected); }
+function fromEngine(c) { return c.messages.filter(m => m.direction === "out").length; }
+
+function drawChannels() {
+  const rows = state.channels.map(c => [c.name, c.address, Math.max(0, fromEngine(c) - (seen[c.name] || 0)), c.name === selected]);
+  if (!changed("channels", rows)) return;
+  const box = document.getElementById("channels");
+  box.replaceChildren(...rows.map(([name, address, unread, isSelected]) => {
+    const button = el("button", "channel" + (isSelected ? " selected" : ""));
+    const label = el("span", "name", NAMES[name] || name);
+    label.append(el("span", "address", address));
+    button.append(label);
+    if (unread) button.append(el("span", "badge", unread));
+    button.onclick = () => {
+      const box = document.getElementById("text");
+      drafts[selected] = box.value;                              // a draft belongs to its channel
+      selected = name;
+      box.value = drafts[name] || "";
+      draw();
+      box.focus();
+    };
+    return button;
+  }));
+}
+
+function drawMessages() {
+  const c = channel();
+  seen[c.name] = fromEngine(c);
+  document.getElementById("title").textContent = NAMES[c.name] || c.name;
+  document.getElementById("address").textContent = c.address;
+  document.getElementById("text").placeholder = "Reply as the client on " + (NAMES[c.name] || c.name);
+  if (!changed("messages", [c.name, c.messages])) return;
+  const box = document.getElementById("messages");
+  box.className = "messages " + c.name;
+  if (!c.messages.length) {
+    box.replaceChildren(el("div", "empty", "No messages on this channel yet. Messages from the engine appear here when they are sent."));
+    return;
+  }
+  box.replaceChildren(...c.messages.map(m => c.name === "email" ? mail(m, c) : bubble(m)));
+  box.scrollTop = box.scrollHeight;
+}
+function bubble(m) {
+  const node = el("div", "bubble " + m.direction);
+  node.append(el("div", "who", m.direction === "out" ? "Assistant" : "You (client)"), document.createTextNode(m.body));
+  payload(node, m);
+  node.append(el("span", "time", time(m.at)));
+  return node;
+}
+function mail(m, c) {
+  const node = el("div", "mail " + m.direction);
+  const head = el("div", "head");
+  head.append(el("span", null, m.direction === "out" ? "From: Assistant → " + c.address : "From: " + c.address + " (you)"), el("span", null, time(m.at)));
+  node.append(head);
+  if (m.subject) node.append(el("div", "subject", m.subject));
+  node.append(document.createTextNode(m.body));
+  payload(node, m);
+  return node;
+}
+function payload(node, m) {
+  for (const [key, value] of Object.entries(m.payload || {})) node.append(el("span", "link", key + ": " + value));
+}
+
+function drawStatus() {
+  const status = state.run && state.run.status;
+  const waiting = !!status && status.phase === "waiting";
+  document.querySelectorAll(".controls button").forEach(b => { b.disabled = !waiting; });
+  if (!changed("status", [state.run && state.run.folder, status])) return;
+  const box = document.getElementById("status");
+  if (!status) {
+    box.className = "status" + (state.run ? " busy" : "");
+    box.replaceChildren(state.run
+      ? el("div", "phase", "starting")
+      : el("div", "phase", "No run yet"));
+    if (!state.run) box.append(el("div", "hint", "Start the engine in a terminal: uv run pequod"));
+    return;
+  }
+  const done = status.phase === "finished" || status.phase === "failed";
+  box.className = "status " + (waiting || done ? status.phase : "busy");
+  const wave = status.wave ? "Wave " + status.wave + " of " + status.max_iterations + " · " : "";
+  box.replaceChildren(el("div", "phase", wave + (PHASES[status.phase] || status.phase)));
+  if (status.error) box.append(el("div", "error", status.error));
+  if (waiting) {
+    if (status.pending.length) {
+      box.append(el("div", "hint", "Planned when this wait started (sent at their time, or now with “Send now”):"));
+      const list = el("ul");
+      status.pending.forEach(p => list.append(el("li", null, (NAMES[p.channel] || p.channel) + " at " + time(p.send_at))));
+      box.append(list);
+    }
+    box.append(el("div", "hint", "Reply as the client in a channel, then press “Next iteration”."));
+  }
+}
+
+function drawProgress() {
+  if (!changed("progress", state.run)) return;
+  const box = document.getElementById("progress");
+  box.replaceChildren();
+  if (!state.run) return;
+  if (state.run.report) {
+    const report = el("div", "report");
+    report.append(el("h3", null, "Report for the supervisor"), document.createTextNode(state.run.report));
+    box.append(report);
+  }
+  [...state.run.waves].reverse().forEach(w => box.append(card(w)));
+  box.append(el("div", "folder", "Run folder: " + state.run.folder));
+}
+function card(w) {
+  const node = el("div", "card");
+  node.append(el("h3", null, "Wave " + w.wave), el("div", "from", "planned from " + w.snapshot));
+  section(node, "Paths", w.paths.map(p => el("li", null, p)));
+  section(node, "Sent", w.interactions.map(i => {
+    const item = el("li", null, "“" + i.text + (i.cut ? "…" : "") + "”");
+    item.prepend(el("span", "meta", (NAMES[i.channel] || i.channel) + " · " + time(i.send_at) + " · "));
+    return item;
+  }));
+  section(node, "Replies absorbed", w.replies.map(r => {
+    const item = el("li", null, "“" + r.body + "”");
+    item.prepend(el("span", "meta", (NAMES[r.channel] || r.channel) + " · " + time(r.received_at) + " · "));
+    return item;
+  }));
+  const flags = FLAGS.filter(f => w.stop_signal[f]).join(", ") || "none";
+  node.append(el("h4", null, "Stop signal"), el("div", null, flags + (w.stop_signal.evidence ? " · “" + w.stop_signal.evidence + "”" : "")));
+  node.append(el("span", "decision" + (w.reason ? " stop" : ""), w.reason ? "Decision: stop (" + w.reason + ")" : "Decision: continue"));
+  return node;
+}
+function section(node, title, items) {
+  node.append(el("h4", null, title));
+  if (!items.length) { node.append(el("div", "none", "(none)")); return; }
+  const list = el("ul");
+  list.append(...items);
+  node.append(list);
+}
+
+function draw() {
+  if (!state) return;
+  const folder = state.run && state.run.folder;
+  if (folder !== run) { run = folder; seen = {}; }               // a new run starts with empty inboxes
+  if (!selected || !channel()) selected = state.channels[0].name;
+  drawMessages();
+  drawChannels();
+  drawStatus();
+  drawProgress();
+}
+
+function connection(isOnline) {
+  if (isOnline === online) return;
+  online = isOnline;
+  document.getElementById("offline").hidden = online;
+}
+
+async function refresh() {
+  try {
+    const response = await fetch("/api/state", { cache: "no-store" });
+    if (response.ok) { state = await response.json(); draw(); }
+    connection(response.ok);
+  } catch (error) { connection(false); }                         // keep trying
+  setTimeout(refresh, ((state && state.refresh_s) || 1) * 1000);
+}
+
+async function post(path, body) {
+  try {
+    const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (response.ok) return true;
+    let detail = response.status;
+    try { detail = (await response.json()).detail; } catch (error) { /* not JSON */ }
+    alert("Not accepted: " + (typeof detail === "string" ? detail : JSON.stringify(detail)));
+  } catch (error) {
+    alert("The simulator's server does not answer. Is `uv run pequod-sim` still running?");
+  }
+  return false;
+}
+
+document.getElementById("reply").onsubmit = async event => {
+  event.preventDefault();
+  const box = document.getElementById("text");
+  if (!box.value.trim() || !selected) return;
+  if (await post("/api/reply", { channel: selected, text: box.value })) box.value = "";
+};
+document.getElementById("text").onkeydown = event => {          // Enter sends, Shift+Enter makes a new line
+  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); document.getElementById("reply").requestSubmit(); }
+};
+document.querySelectorAll(".controls button").forEach(button => {
+  button.onclick = async () => { button.disabled = true; await post("/api/command", { command: button.dataset.command }); };
+});
+
+refresh();
+</script>
+</body>
+</html>
