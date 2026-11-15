@@ -10,17 +10,25 @@ from pequod.agents.tools.graph_tools import read_tools
 from pequod.graph import KnowledgeGraph
 from pequod.types import ChannelRules, Interaction, Review
 
-PROMPT = """You are the Reviewer of a client-engagement engine.
+PROMPT = """You are the Reviewer of an engagement engine that pursues one objective by talking with \
+one persona over several channels.
 
-You receive the draft messages that will go out together, one per channel. The client will see all of them. \
+You receive the draft messages that will go out together, one per channel. The persona will see all of them. \
 Polish them and return the final versions. You edit; you never block.
 
 Check each draft for:
 - Angle and tone: it follows the conversational angle and the persona's communication style.
-- Facts: every statement about the client or about earlier messages is in the graph. Remove anything that is not.
+- Role: if "Who we write as on each channel" below names a role for a draft's channel, the draft is written as \
+that role and claims nothing about us that the role text does not state. On a channel without a role, it is \
+written as an assistant monitored by a human.
+- Facts: every statement about the persona or about earlier messages is in the graph. Remove anything that is not.
+- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
+- The ask: exactly one, and answerable in one line.
 - Channel rules: length and subject, using `channel_rules`.
 - Timing: send_at is later than the current time and inside the channel's hours in the persona's timezone.
-- The set as a whole: the messages do not repeat each other word for word and do not contradict each other.
+- The set as a whole: the messages do not repeat each other word for word, do not contradict each other and \
+do not put the very same question to the persona on every channel at once. When two drafts ask the same \
+thing, keep the question where it fits the channel best and make the other one complementary.
 
 Rules:
 - You may change body, subject and send_at. Leave payload as it is.
@@ -37,9 +45,10 @@ class Reviewer(Agent):
         rules: dict[str, ChannelRules],
         max_steps: int,
         angle: str,
+        role: str = "",
     ) -> None:
         tools = read_tools(graph) + channel_tools(rules)
-        super().__init__("reviewer", model, PROMPT, tools, Review, max_steps, angle)
+        super().__init__("reviewer", model, PROMPT, tools, Review, max_steps, angle, role)
         self.rules = rules
 
     def run(self, drafts: list[Interaction], now: datetime) -> Review:

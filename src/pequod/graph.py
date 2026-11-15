@@ -17,7 +17,7 @@ def braces(attrs: dict) -> str:
 
 
 class KnowledgeGraph:
-    """What we know about the client. Free-form kinds and relations, observed facts only."""
+    """What we know about the persona. Free-form kinds and relations, observed facts only."""
 
     def __init__(self) -> None:
         self._g = nx.MultiDiGraph()

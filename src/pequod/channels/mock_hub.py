@@ -25,7 +25,7 @@ def utc(at: datetime) -> str:
 
 
 class MockHub:
-    """Messages sent by the engine ("out") and replies written by whoever plays the client ("in")."""
+    """Messages sent by the engine ("out") and replies written by whoever plays the persona ("in")."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -79,11 +79,20 @@ class MockHub:
         with closing(sqlite3.connect(self.path)) as db, db:  # one step for a reader
             db.execute("DELETE FROM messages")
             db.execute("DELETE FROM commands")
-            db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('run_folder', ?)", (str(folder),))
+            db.execute("DELETE FROM meta")
+            db.execute("INSERT INTO meta (key, value) VALUES ('run_folder', ?)", (str(folder),))
 
     def run_folder(self) -> Path | None:
         rows, _ = self._run("SELECT value FROM meta WHERE key = 'run_folder'")
         return Path(rows[0][0]) if rows else None
+
+    def set_channels(self, addresses: dict[str, str]) -> None:
+        """The channels of the current run (name -> the persona's address), for the simulator and `pequod reply`."""
+        self._run("INSERT OR REPLACE INTO meta (key, value) VALUES ('channels', ?)", (json.dumps(addresses),))
+
+    def channels(self) -> dict[str, str] | None:
+        rows, _ = self._run("SELECT value FROM meta WHERE key = 'channels'")
+        return json.loads(rows[0][0]) if rows else None
 
     def add_command(self, command: str) -> None:
         if command not in COMMANDS:

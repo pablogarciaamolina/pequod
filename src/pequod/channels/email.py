@@ -16,7 +16,7 @@ from pequod.types import ChannelRules, Interaction, Reply
 log = logging.getLogger(__name__)
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")  # IMAP wants English
-QUOTE = re.compile(r">+( |$)")  # a quoted line; ">50%" is the client's own text
+QUOTE = re.compile(r">+( |$)")  # a quoted line; ">50%" is the persona's own text
 ORIGINAL = re.compile(r"-+ ?(original message|mensaje original|ursprüngliche nachricht) ?-+", re.IGNORECASE)
 FROM = ("from:", "de:", "von:")  # first line of the header block that Outlook puts above the original
 SENT = ("sent:", "date:", "enviado", "fecha:", "gesendet:", "datum:")
@@ -27,7 +27,7 @@ class EmailMock(MockChannel):
 
 
 def unquote(body: str) -> str:
-    """The client's own words, without the original message that mail programs add to a reply:
+    """The persona's own words, without the original message that mail programs add to a reply:
     quoted lines ("> ..."), the "On ... wrote:" line before them, and everything from an
     "Original Message" line or an Outlook header block (From: / Sent:) on."""
     lines = body.strip().splitlines()
@@ -60,7 +60,7 @@ class EmailLive(Channel):
         smtp_host: str, smtp_port: int, imap_host: str, default_subject: str, timeout_s: float,
     ) -> None:
         super().__init__(rules)
-        self.address = address  # the client
+        self.address = address  # the persona
         self.user, self.password = user, password  # our mailbox
         self.smtp_host, self.smtp_port, self.imap_host = smtp_host, smtp_port, imap_host
         self.default_subject = default_subject
@@ -98,7 +98,7 @@ class EmailLive(Channel):
                     try:
                         reply = self._read(parts[0][1])
                     except (ValueError, LookupError, TypeError) as e:  # no date, no id, unknown charset, ...
-                        log.warning("email: a mail from the client could not be read and was skipped (%s)", type(e).__name__)
+                        log.warning("email: a mail from the persona could not be read and was skipped (%s)", type(e).__name__)
                         continue
                     if reply and reply.received_at >= since:
                         replies.append(reply)
@@ -107,7 +107,7 @@ class EmailLive(Channel):
         return sorted(replies, key=lambda r: r.received_at)
 
     def _read(self, raw: bytes) -> Reply | None:
-        """One mail as a Reply; None when it is not from the client or has no text of its own."""
+        """One mail as a Reply; None when it is not from the persona or has no text of its own."""
         mail = email.message_from_bytes(raw, policy=email.policy.default)
         if parseaddr(mail["From"] or "")[1].lower() != self.address.lower():
             return None

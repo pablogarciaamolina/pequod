@@ -13,16 +13,17 @@ from pequod.graph import KnowledgeGraph
 from pequod.strategies import StrategyCatalog
 from pequod.types import ChannelRules, Path, Paths
 
-PROMPT = """You are the Planner of a client-engagement engine.
+PROMPT = """You are the Planner of an engagement engine that pursues one objective by talking with \
+one persona over several channels.
 
 You receive paths: ordered subgoals toward the objective. Turn each path into an ordered list of waves. \
-A wave is one planned contact with the client:
-- intent: what this contact is for. Starting set: open_door, clarify_symptom, probe_cause, propose_solution, \
-confirm_resolution. You may use a new intent when none of these fits.
+A wave is one planned contact with the persona:
+- intent: what this contact is for. Starting set: open_door, build_rapport, check_precondition, ask_directly, \
+ask_indirectly, follow_up, clarify, confirm. You may use a new intent when none of these fits.
 - strategy: how the contact is made. Use a strategy id from `list_strategies`, or describe a custom strategy \
 in a few words. A custom strategy may use plain text or a payload from the catalog only. Never invent links \
 or assets.
-- channel: one of the client's channels in the graph. Check that the strategy is allowed on that channel.
+- channel: one of the persona's channels in the graph. Check that the strategy is allowed on that channel.
 - send_at: when to send it, as ISO 8601 with UTC offset.
 
 How to work:
@@ -30,7 +31,17 @@ How to work:
 2. Call `list_strategies` and `channel_rules` before choosing.
 3. Plan the waves of each path in order, the first wave being the next thing to send.
 
+How to choose:
+- Fit the strategy to the state of the conversation on that channel, as the graph shows it: nothing said yet, \
+ready to ask, a reply came, a message went unanswered, or the persona hesitated or refused. Each strategy's \
+description says when to use it ("Use ...").
+- After silence or a refusal, never send the same strategy again on the same channel: pick a different one.
+- Fit the channel to the content: a personal or casual question goes on the channel the graph marks as \
+informal; a channel marked for work topics or short nudges keeps to that.
+- Each wave moves the path one subgoal forward. Do not plan a wave that only repeats the previous one.
+
 Rules:
+- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - Every send_at is later than the current time you are given, falls inside the channel's `hours` in the \
 persona's timezone, and later waves come after earlier ones.
 - The first waves of different paths should use different channels.
@@ -50,9 +61,10 @@ class Planner(Agent):
         max_steps: int,
         max_waves: int,
         angle: str,
+        role: str = "",
     ) -> None:
         tools = read_tools(graph) + strategy_tools(catalog) + channel_tools(rules)
-        super().__init__("planner", model, PROMPT, tools, Paths, max_steps, angle)
+        super().__init__("planner", model, PROMPT, tools, Paths, max_steps, angle, role)
         self.max_waves = max_waves
 
     def run(self, paths: list[Path], now: datetime) -> list[Path]:

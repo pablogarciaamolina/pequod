@@ -1,6 +1,7 @@
 # Real platforms. credentials: what the channel needs -> name of the variable that must be set in .env
 email:
   mode: live
+  role: ""   # who we write as on this channel, e.g. "Sam from Paws & Co, a pet shop"; empty = an assistant
   credentials: {user: EMAIL_ADDRESS, password: EMAIL_APP_PASSWORD}
   smtp_host: smtp.gmail.com
   smtp_port: 465
@@ -10,9 +11,13 @@ email:
   rules: {max_length: 2000, subject: true, links_ok: true}
 sms:
   mode: live
+  role: ""   # who we write as on this channel, e.g. "Sam from Paws & Co, a pet shop"; empty = an assistant
   credentials: {sid: TWILIO_ACCOUNT_SID, token: TWILIO_AUTH_TOKEN, sender: TWILIO_SMS_FROM}
+  timeout_s: 30
   rules: {max_length: 160, subject: false, links_ok: true}
 whatsapp:
   mode: live
+  role: ""   # who we write as on this channel, e.g. "Sam from Paws & Co, a pet shop"; empty = an assistant
   credentials: {sid: TWILIO_ACCOUNT_SID, token: TWILIO_AUTH_TOKEN, sender: TWILIO_WHATSAPP_FROM}
+  timeout_s: 30
   rules: {max_length: 1000, subject: false, links_ok: true}

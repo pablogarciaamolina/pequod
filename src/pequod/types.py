@@ -64,7 +64,7 @@ class Path(BaseModel):
 
 
 class Interaction(BaseModel):
-    """One message to the client on one channel."""
+    """One message to the persona on one channel."""
 
     channel: str
     send_at: SendAt
@@ -81,23 +81,23 @@ class Reply(BaseModel):
 
 
 class StopSignal(BaseModel):
-    """Whether the engagement should stop, judged from the client's replies."""
+    """Whether the engagement should stop, judged from the persona's replies."""
 
-    root_problem_stated: bool = False
+    objective_met: bool = False
     solution_accepted: bool = False
     opt_out: bool = False
-    evidence: str = Field("", description="The client's exact words that justify a true flag; empty if none")
+    evidence: str = Field("", description="The persona's exact words that justify a true flag; empty if none")
 
     @property
     def stop(self) -> bool:
-        return self.root_problem_stated or self.solution_accepted or self.opt_out
+        return self.objective_met or self.solution_accepted or self.opt_out
 
 
-StopReason = Literal["root_problem_stated", "solution_accepted", "opt_out", "max_iterations", "operator_stop"]
+StopReason = Literal["objective_met", "solution_accepted", "opt_out", "max_iterations", "operator_stop"]
 
 
 class Resolution(BaseModel):
-    """Final report for the supervisor, who contacts the client. Nothing is sent to the client."""
+    """Final report for the supervisor, who contacts the persona. Nothing is sent to the persona."""
 
     report: str
 
@@ -105,7 +105,7 @@ class Resolution(BaseModel):
 # --- trace ---
 
 class Message(BaseModel):
-    """One message of a conversation, in full: sent by the engine ("out") or received from the client ("in")."""
+    """One message of a conversation, in full: sent by the engine ("out") or received from the persona ("in")."""
 
     direction: Literal["out", "in"]
     channel: str

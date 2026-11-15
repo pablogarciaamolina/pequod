@@ -39,7 +39,7 @@ def read_tools(graph: KnowledgeGraph) -> list[BaseTool]:
 def write_tools(graph: KnowledgeGraph) -> list[BaseTool]:
     @tool
     def add_node(kind: str, name: str, attrs: dict[str, Any] | None = None) -> str:
-        """Create a node for a fact stated by the client or in the input. Returns the new node id."""
+        """Create a node for a fact stated by the persona or in the input. Returns the new node id."""
         try:
             return graph.add_node(kind, name, attrs)
         except ValueError as e:

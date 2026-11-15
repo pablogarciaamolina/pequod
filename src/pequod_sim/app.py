@@ -30,8 +30,11 @@ class CommandIn(BaseModel):
 
 
 def create_app(hub: MockHub, channels: dict[str, str], refresh_s: float) -> FastAPI:
-    """`channels` maps each channel name to the client's address on it."""
+    """`channels` (name -> the persona's address) is used until a run has told the hub its own channels."""
     app = FastAPI(title="Pequod simulator")
+
+    def current() -> dict[str, str]:
+        return hub.channels() or channels
 
     @app.get("/")
     def page() -> FileResponse:
@@ -54,16 +57,16 @@ def create_app(hub: MockHub, channels: dict[str, str], refresh_s: float) -> Fast
             "refresh_s": refresh_s,
             "channels": [
                 {"name": name, "address": address, "messages": [m.model_dump(mode="json") for m in hub.conversation(name)]}
-                for name, address in channels.items()
+                for name, address in current().items()
             ],
             "run": run,
         }
 
     @app.post("/api/reply")
     def reply(body: ReplyIn) -> dict:
-        """The person playing the client answers on one channel."""
-        if body.channel not in channels:
-            raise HTTPException(422, f"Unknown channel '{body.channel}'. Use one of: {', '.join(channels)}")
+        """The person playing the persona answers on one channel."""
+        if body.channel not in current():
+            raise HTTPException(422, f"Unknown channel '{body.channel}'. Use one of: {', '.join(current())}")
         if not body.text.strip():
             raise HTTPException(422, "The reply is empty.")
         hub.add_reply(body.channel, body.text.strip(), now())

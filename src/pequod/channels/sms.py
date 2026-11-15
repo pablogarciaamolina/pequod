@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timezone
 
 from twilio.base.exceptions import TwilioException, TwilioRestException
+from twilio.http.http_client import TwilioHttpClient
 from twilio.rest import Client
 
 from pequod.channels.base import Channel, ChannelError, MockChannel, text
@@ -44,7 +45,8 @@ class TwilioChannel(Channel):
 
     @classmethod
     def from_config(cls, rules: ChannelRules, address: str, settings: dict, secrets: dict[str, str]) -> "TwilioChannel":
-        return cls(rules, address, secrets["sender"], Client(secrets["sid"], secrets["token"]))
+        http = TwilioHttpClient(timeout=settings["timeout_s"])  # give up on a network that does not answer
+        return cls(rules, address, secrets["sender"], Client(secrets["sid"], secrets["token"], http_client=http))
 
     def send(self, interaction: Interaction) -> str:
         self.accept(interaction)

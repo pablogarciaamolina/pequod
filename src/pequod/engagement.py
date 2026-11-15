@@ -156,7 +156,7 @@ class Agents:
     resolver: Resolver
 
 
-STOP_FLAGS = ("opt_out", "solution_accepted", "root_problem_stated")  # first true one is the stop reason
+STOP_FLAGS = ("opt_out", "solution_accepted", "objective_met")  # first true one is the stop reason
 
 
 class EngagementLoop:
@@ -215,7 +215,7 @@ class EngagementLoop:
         for r in replies:
             self.trace.received(r)
             text.info("REPLY on %s: %s", r.channel, r.body)
-        signal = self.agents.updater.run(state["sent"], replies)
+        signal = self.agents.updater.run(state["sent"], replies, self.objective)
         reason = (
             next((flag for flag in STOP_FLAGS if getattr(signal, flag)), None)
             or ("operator_stop" if state["operator_stop"] else None)

@@ -1,4 +1,4 @@
-objective: "Surface Alex's real underlying problem and resolve it."
+objective: "Find out the name of Alex's dog."
 persona:
   name: Alex Carter
   features:
@@ -6,7 +6,7 @@ persona:
     org: Northwind Labs
     timezone: Europe/Berlin
     comms_style: direct, short
-    notes: "Renewal call on 2026-10-02: said 'reporting is a mess'."
+    notes: "Mentioned on the renewal call on 2026-10-02 that they have a dog."
 channels:
   email:
     address: alex@northwind.example
@@ -16,4 +16,4 @@ channels:
     features: {hours: "12-18", notes: "short nudges only"}
   whatsapp:
     address: "+00 000 000"
-    features: {hours: "09-19"}
+    features: {hours: "09-19", notes: "casual, personal topics ok"}

@@ -14,7 +14,7 @@ from pequod.types import ChannelRules
 
 MOCKS = {c.name: c for c in (EmailMock, SmsMock, WhatsAppMock)}
 LIVE = {c.name: c for c in (EmailLive, SmsLive, WhatsAppLive)}
-NOT_SETTINGS = ("mode", "credentials", "rules")
+NOT_SETTINGS = ("mode", "role", "credentials", "rules")  # `role` is for the agents' prompts, not for the channel
 
 
 def placeholder(address: str) -> bool:
@@ -37,7 +37,7 @@ def build_channels(
     clock: Callable[[], datetime],
     env: Mapping[str, str] = os.environ,
 ) -> dict[str, Channel]:
-    """One channel object per engagement channel (`addresses`: name -> the client's address on it),
+    """One channel object per engagement channel (`addresses`: name -> the persona's address on it),
     mock or live as the config says. Live channels are checked before any is built: credentials
     present in `env`, and a real recipient address."""
     for name, address in addresses.items():
@@ -51,8 +51,8 @@ def build_channels(
         if placeholder(address):
             raise ValueError(f"Live {name}: '{address}' is a placeholder address. Use an engagement with real addresses.")
         ours = [env[variable] for variable in config[name].credentials.values()]
-        if same(address) in map(same, ours):  # a message to ourselves would come back as the client's reply
-            raise ValueError(f"Live {name}: the client's address '{address}' is the same as our own sender address.")
+        if same(address) in map(same, ours):  # a message to ourselves would come back as the persona's reply
+            raise ValueError(f"Live {name}: the persona's address '{address}' is the same as our own sender address.")
 
     channels = {}
     for name, address in addresses.items():

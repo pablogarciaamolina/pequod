@@ -3,9 +3,9 @@
 # Do not commit this file with real addresses in it.
 # You can remove a channel you do not want to use. With one channel left, also start with run.max_paths=1
 # (each path needs its own channel).
-objective: "Surface the client's real underlying problem and resolve it."
+objective: "Surface the persona's real underlying problem and resolve it."
 persona:
-  name: Test Client
+  name: Test Persona
   features:
     role: Operations lead
     org: Northwind Labs

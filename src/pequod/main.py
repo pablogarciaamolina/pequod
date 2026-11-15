@@ -45,17 +45,18 @@ def now() -> datetime:
 
 
 def reply(args: list[str]) -> int:
-    """Answer as the client: write one reply into the mock hub. Returns the exit code."""
+    """Answer as the persona: write one reply into the mock hub. Returns the exit code."""
     if len(args) != 2 or not args[1].strip():
         print(USAGE, file=sys.stderr)
         return 2
     channel, text = args
     with initialize_config_dir(config_dir=CONFIGS, version_base=None):
         cfg = compose(config_name="config")
-    if channel not in cfg.engagement.channels:
-        print(f"Unknown channel '{channel}'. Use one of: {', '.join(cfg.engagement.channels)}", file=sys.stderr)
-        return 2
     hub = MockHub(cfg.mock_hub)
+    channels = hub.channels() or cfg.engagement.channels  # the running run's channels, if a run has started
+    if channel not in channels:
+        print(f"Unknown channel '{channel}'. Use one of: {', '.join(channels)}", file=sys.stderr)
+        return 2
     hub.add_reply(channel, text, now())
     print(f"Reply stored on {channel} ({hub.path.resolve()}).")
     return 0
@@ -147,19 +148,25 @@ def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> Engag
             "each path needs its own channel"
         )
     addresses = {name: channel.address for name, channel in engagement.channels.items()}
+    if hub:
+        hub.set_channels(addresses)  # the simulator and `pequod reply` follow the run, not the default config
     channels = build_channels(cfg.channels, addresses, hub, now)
     rules = {name: channel.rules for name, channel in channels.items()}
     graph = KnowledgeGraph.from_engagement(engagement)
     catalog = StrategyCatalog.from_config(cfg.strategies)
 
+    roles = {name: cfg.channels[name].role for name in channels if cfg.channels[name].role}
+    lines = ["Who we write as on each channel:", *(f"- {name}: {text}" for name, text in roles.items())]
+    role = "\n".join(lines) if roles else ""  # added to the prompts like the angle
+
     models = {}
 
     steps = {name: agent.max_steps for name, agent in cfg.agents.items()}
     agents = Agents(
-        strategist=Strategist(model("strategist"), graph, steps["strategist"], run.max_paths),
-        planner=Planner(model("planner"), graph, catalog, rules, steps["planner"], run.max_waves, angle),
-        composer=Composer(model("composer"), graph, catalog, rules, steps["composer"], angle),
-        reviewer=Reviewer(model("reviewer"), graph, rules, steps["reviewer"], angle),
+        strategist=Strategist(model("strategist"), graph, steps["strategist"], run.max_paths, role),
+        planner=Planner(model("planner"), graph, catalog, rules, steps["planner"], run.max_waves, angle, role),
+        composer=Composer(model("composer"), graph, catalog, rules, steps["composer"], angle, role),
+        reviewer=Reviewer(model("reviewer"), graph, rules, steps["reviewer"], angle, role),
         updater=Updater(model("updater"), graph, steps["updater"]),
         resolver=Resolver(model("resolver"), graph, steps["resolver"], angle),
     )
@@ -199,7 +206,7 @@ def play(cfg: DictConfig, operator: Operator, folder: str | Path) -> int:
 
 
 def brief(error: Exception, register: bool) -> str:
-    """The error as it is stored. With the register off, nothing that could quote a model or a client:
+    """The error as it is stored. With the register off, nothing that could quote a model or a persona:
     an agent's failure keeps its first sentence, a wrapped library error only its type."""
     message = str(error)
     if register or not isinstance(error, AgentError):

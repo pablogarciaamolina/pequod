@@ -107,7 +107,7 @@
 <body>
 <div class="app">
   <nav class="side">
-    <div class="brand">Pequod <small>simulator: you are the client</small></div>
+    <div class="brand">Pequod <small>simulator: you are the persona</small></div>
     <div class="label">Channels</div>
     <div id="channels"></div>
   </nav>
@@ -116,7 +116,7 @@
     <header><b id="title"></b><span id="address"></span></header>
     <div class="messages" id="messages"></div>
     <form class="reply" id="reply">
-      <textarea id="text" placeholder="Reply as the client" aria-label="Reply as the client"></textarea>
+      <textarea id="text" placeholder="Reply as the persona" aria-label="Reply as the persona"></textarea>
       <button class="primary" type="submit">Send</button>
     </form>
   </main>
@@ -148,7 +148,7 @@ const PHASES = {
   finished: "finished",
   failed: "stopped by an error",
 };
-const FLAGS = ["root_problem_stated", "solution_accepted", "opt_out"];
+const FLAGS = ["objective_met", "solution_accepted", "opt_out"];
 
 let state = null;      // last answer of /api/state
 let selected = null;   // name of the channel shown
@@ -203,7 +203,7 @@ function drawMessages() {
   seen[c.name] = fromEngine(c);
   document.getElementById("title").textContent = NAMES[c.name] || c.name;
   document.getElementById("address").textContent = c.address;
-  document.getElementById("text").placeholder = "Reply as the client on " + (NAMES[c.name] || c.name);
+  document.getElementById("text").placeholder = "Reply as the persona on " + (NAMES[c.name] || c.name);
   if (!changed("messages", [c.name, c.messages])) return;
   const box = document.getElementById("messages");
   box.className = "messages " + c.name;
@@ -216,7 +216,7 @@ function drawMessages() {
 }
 function bubble(m) {
   const node = el("div", "bubble " + m.direction);
-  node.append(el("div", "who", m.direction === "out" ? "Assistant" : "You (client)"), document.createTextNode(m.body));
+  node.append(el("div", "who", m.direction === "out" ? "Assistant" : "You (persona)"), document.createTextNode(m.body));
   payload(node, m);
   node.append(el("span", "time", time(m.at)));
   return node;
@@ -261,7 +261,7 @@ function drawStatus() {
       status.pending.forEach(p => list.append(el("li", null, (NAMES[p.channel] || p.channel) + " at " + time(p.send_at))));
       box.append(list);
     }
-    box.append(el("div", "hint", "Reply as the client in a channel, then press “Next iteration”."));
+    box.append(el("div", "hint", "Reply as the persona in a channel, then press “Next iteration”."));
   }
 }
 

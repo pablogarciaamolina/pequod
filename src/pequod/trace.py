@@ -16,7 +16,7 @@ from pequod.types import (
 log = logging.getLogger(__name__)
 
 CUT = 80  # characters of a message body kept in the trace
-FLAGS = ("root_problem_stated", "solution_accepted", "opt_out")
+FLAGS = ("objective_met", "solution_accepted", "opt_out")
 
 
 def when(at: datetime) -> str:

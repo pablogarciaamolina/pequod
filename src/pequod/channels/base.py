@@ -24,7 +24,7 @@ def text(interaction: Interaction) -> str:
 
 
 class Channel(ABC):
-    """One way to reach the client. Mock and live versions share this interface."""
+    """One way to reach the persona. Mock and live versions share this interface."""
 
     name: str
 

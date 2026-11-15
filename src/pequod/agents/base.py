@@ -58,10 +58,13 @@ class Agent:
         output_type: type[BaseModel],
         max_steps: int,
         angle: str = "",
+        role: str = "",
     ) -> None:
         self.name = name
         self.model = model
-        self.system_prompt = system_prompt + (f"\n\nConversational angle: {angle}" if angle else "")
+        self.system_prompt = (
+            system_prompt + (f"\n\n{role}" if role else "") + (f"\n\nConversational angle: {angle}" if angle else "")
+        )
         self.tools = tools
         self.output_type = output_type
         self.max_steps = max_steps
