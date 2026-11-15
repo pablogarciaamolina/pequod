@@ -1,10 +1,15 @@
 """WhatsAppMock + WhatsAppLive."""
 
 from pequod.channels.base import MockChannel
+from pequod.channels.sms import TwilioChannel
 
 
 class WhatsAppMock(MockChannel):
     name = "whatsapp"
 
 
-# WhatsAppLive: Stage 6
+class WhatsAppLive(TwilioChannel):
+    """WhatsApp through Twilio (sandbox or an approved sender)."""
+
+    name = "whatsapp"
+    prefix = "whatsapp:"

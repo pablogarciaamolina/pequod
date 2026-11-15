@@ -1,11 +1,26 @@
 """Channel interface."""
 
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import datetime
 
 from pequod.channels.mock_hub import MockHub
 from pequod.types import ChannelRules, Interaction, Reply
+
+
+class ChannelError(RuntimeError):
+    """A real platform refused or could not be reached. The message names the channel, never a credential."""
+
+
+def text(interaction: Interaction) -> str:
+    """The body as it goes out on a platform without a payload field: a payload link that the body
+    does not already contain is added as a last line."""
+    extra = [
+        value for value in (interaction.payload or {}).values()
+        if value and not re.search(re.escape(value) + r"(?![\w/-])", interaction.body)  # the whole link, not its start
+    ]
+    return "\n".join([interaction.body, *extra])
 
 
 class Channel(ABC):
@@ -15,6 +30,10 @@ class Channel(ABC):
 
     def __init__(self, rules: ChannelRules) -> None:
         self.rules = rules
+
+    def accept(self, interaction: Interaction) -> None:
+        if interaction.channel != self.name:
+            raise ValueError(f"Interaction for '{interaction.channel}' cannot be sent on '{self.name}'")
 
     @abstractmethod
     def send(self, interaction: Interaction) -> str:
@@ -34,8 +53,7 @@ class MockChannel(Channel):
         self.clock = clock
 
     def send(self, interaction: Interaction) -> str:
-        if interaction.channel != self.name:
-            raise ValueError(f"Interaction for '{interaction.channel}' cannot be sent on '{self.name}'")
+        self.accept(interaction)
         return self.hub.add_sent(interaction, self.clock())
 
     def fetch_replies(self, since: datetime) -> list[Reply]:

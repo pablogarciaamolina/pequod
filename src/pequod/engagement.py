@@ -26,6 +26,7 @@ from pequod.trace import Trace
 from pequod.types import Interaction, Path, Resolution, StopReason, StopSignal
 
 log = logging.getLogger(__name__)
+text = logging.getLogger("pequod.text")  # what was planned, said and learned; kept out of the log file when run.register is off
 
 Command = Literal["ok", "stop", "send"]
 COMMANDS: dict[str, Command] = {"": "ok", "q": "stop", "s": "send"}
@@ -100,7 +101,7 @@ class Scheduler:
         self.on_send(i)
         subject = f"\n  Subject: {i.subject}" if i.subject else ""
         payload = f"\n  Payload: {i.payload}" if i.payload else ""
-        log.info("SENT on %s:%s\n  %s%s", i.channel, subject, i.body, payload)
+        text.info("SENT on %s:%s\n  %s%s", i.channel, subject, i.body, payload)
 
     def run(self, pending: list[Interaction]) -> tuple[list[Interaction], bool]:
         """Returns (what was sent, operator asked to stop). Ends when the reply window after the last
@@ -213,7 +214,7 @@ class EngagementLoop:
         self.seen.update(r.id for r in replies)
         for r in replies:
             self.trace.received(r)
-            log.info("REPLY on %s: %s", r.channel, r.body)
+            text.info("REPLY on %s: %s", r.channel, r.body)
         signal = self.agents.updater.run(state["sent"], replies)
         reason = (
             next((flag for flag in STOP_FLAGS if getattr(signal, flag)), None)
@@ -231,7 +232,7 @@ class EngagementLoop:
         log.info("=== Iteration %d of %d ===", iteration, self.max_iterations)
         paths = self.agents.planner.run(self.agents.strategist.run(self.objective), self.clock())
         for p in paths:
-            log.info("PATH: %s | first wave: %s on %s", p.rationale, p.waves[0].intent, p.waves[0].channel)
+            text.info("PATH: %s | first wave: %s on %s", p.rationale, p.waves[0].intent, p.waves[0].channel)
         return {"iteration": iteration, "paths": paths}
 
     def act(self, state: LoopState) -> dict:
@@ -240,7 +241,7 @@ class EngagementLoop:
         for path in state["paths"]:  # one after another: each Composer sees the channels already used
             drafts.append(self.agents.composer.run(path, [d.channel for d in drafts]))
         review = self.agents.reviewer.run(drafts, self.clock())
-        log.info("REVIEW: %s", review.notes)
+        text.info("REVIEW: %s", review.notes)
         return {"pending": review.interactions}
 
     def wait(self, state: LoopState) -> dict:
@@ -254,6 +255,6 @@ class EngagementLoop:
         resolution = self.agents.resolver.run(state["reason"], state["signal"], self.objective)
         self.trace.report(state["reason"], resolution)
         self.trace.status("finished", state["iteration"], self.max_iterations)
-        log.info("REPORT FOR THE SUPERVISOR\n%s", resolution.report)
+        text.info("REPORT FOR THE SUPERVISOR\n%s", resolution.report)
         log.info("Run folder: %s (cards: pequod explain <folder>)", self.trace.folder)
         return {"resolution": resolution}

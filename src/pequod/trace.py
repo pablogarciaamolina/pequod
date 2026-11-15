@@ -61,7 +61,10 @@ class Trace:
     """The record of one run in its folder, all UTF-8: trace.jsonl (one line per wave), messages.jsonl
     (every message in full), graph_<n>.json, status.json (what the engine is doing now), report.md."""
 
-    def __init__(self, folder: str | FilePath) -> None:
+    def __init__(self, folder: str | FilePath, register: bool = True) -> None:
+        """`register=False`: nothing of what was planned, said or learned is stored; only a status
+        without message text, which the simulator needs."""
+        self.register = register
         self.folder = FilePath(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self.lines = self.folder / "trace.jsonl"
@@ -69,7 +72,8 @@ class Trace:
     def snapshot(self, graph: KnowledgeGraph, n: int) -> str:
         """Save the graph after update n (0 = after intake). Returns the file name."""
         name = f"graph_{n}.json"
-        graph.snapshot(self.folder / name)
+        if self.register:
+            graph.snapshot(self.folder / name)
         return name
 
     def record(
@@ -91,11 +95,13 @@ class Trace:
             stop_signal=signal,
             reason=reason,
         )
-        self._append(self.lines, record)
+        if self.register:
+            self._append(self.lines, record)
         return record
 
     def report(self, reason: StopReason, resolution: Resolution) -> None:
-        self._replace("report.md", f"Stop reason: {reason}\n\n{resolution.report}\n")
+        if self.register:
+            self._replace("report.md", f"Stop reason: {reason}\n\n{resolution.report}\n")
 
     def read_report(self) -> str | None:
         report = self.folder / "report.md"
@@ -109,15 +115,17 @@ class Trace:
     def sent(self, interaction: Interaction) -> None:
         """Register a message at the moment it goes out (`send_at` is the real time)."""
         i = interaction
-        self._append(
-            self.folder / "messages.jsonl",
-            Message(direction="out", channel=i.channel, at=i.send_at, body=i.body, subject=i.subject, payload=i.payload),
-        )
+        if self.register:
+            self._append(
+                self.folder / "messages.jsonl",
+                Message(direction="out", channel=i.channel, at=i.send_at, body=i.body, subject=i.subject, payload=i.payload),
+            )
 
     def received(self, reply: Reply) -> None:
         """Register a reply at the moment it is fetched."""
-        message = Message(direction="in", channel=reply.channel, at=reply.received_at, body=reply.body)
-        self._append(self.folder / "messages.jsonl", message)
+        if self.register:
+            message = Message(direction="in", channel=reply.channel, at=reply.received_at, body=reply.body)
+            self._append(self.folder / "messages.jsonl", message)
 
     def messages(self) -> list[Message]:
         return [Message.model_validate_json(text) for text in self._lines(self.folder / "messages.jsonl")]
@@ -127,10 +135,10 @@ class Trace:
     def status(
         self, phase: str, wave: int = 0, max_iterations: int = 0, pending: list[Interaction] = (), error: str = ""
     ) -> None:
-        status = Status(
-            phase=phase, wave=wave, max_iterations=max_iterations, pending=[line(i) for i in pending], error=error
-        )
-        self._show(status)
+        lines = [line(i) for i in pending]
+        if not self.register:
+            lines = [item.model_copy(update={"text": "", "cut": False}) for item in lines]
+        self._show(Status(phase=phase, wave=wave, max_iterations=max_iterations, pending=lines, error=error))
 
     def read_status(self) -> Status | None:
         status = self.folder / "status.json"
@@ -138,6 +146,8 @@ class Trace:
 
     def fail(self, error: str) -> None:
         """Mark the run as stopped by an error, keeping the wave it was in."""
+        if not self.register:  # an agent's error can quote a model's words: keep its first sentence only
+            error = error.split(" Last message:")[0]
         last = self.read_status() or Status(phase="failed")
         self._show(last.model_copy(update={"phase": "failed", "pending": [], "error": error}))
 
