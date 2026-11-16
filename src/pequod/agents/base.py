@@ -7,10 +7,11 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage, convert_to_messages
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, create_model, model_validator
 
-from pequod.types import ChannelRules, Interaction
+from pequod.types import AgentRun, ChannelRules, Interaction
 
 
 def checked(base: type[BaseModel], check: Callable[[BaseModel], None]) -> type[BaseModel]:
@@ -42,6 +43,19 @@ def fits(interaction: Interaction, rules: ChannelRules) -> None:
         raise ValueError(f"{i.channel} has no subject line; leave subject empty.")
 
 
+def turn(message: BaseMessage) -> dict:
+    """One message of an agent's loop as plain data; empty parts are left out."""
+    m = message
+    parts = {
+        "type": m.type,
+        "content": m.content,
+        "reasoning": m.additional_kwargs.get("reasoning_content"),  # what a thinking model thought before answering
+        "tool_calls": [{"name": c["name"], "args": c["args"]} for c in getattr(m, "tool_calls", [])],
+        "name": m.name,  # of a tool result: the tool
+    }
+    return {key: value for key, value in parts.items() if value}
+
+
 class AgentError(RuntimeError):
     """The agent ended without a valid output."""
 
@@ -68,35 +82,46 @@ class Agent:
         self.tools = tools
         self.output_type = output_type
         self.max_steps = max_steps
+        self.record: Callable[[AgentRun], None] = lambda run: None  # the run's trace sets it (main.build_loop)
 
     def invoke(self, message: str, check: Callable[[BaseModel], None] | None = None) -> BaseModel:
         """Run the loop. `check` rejects an output by raising ValueError; the error goes back to the model."""
         output_type = checked(self.output_type, check) if check else self.output_type
         messages: list = [("user", message)]
         calls = 0
-        while True:
-            agent = create_agent(
-                model=self.model,
-                tools=self.tools,
-                system_prompt=self.system_prompt,
-                response_format=ToolStrategy(output_type),
-                middleware=[ModelCallLimitMiddleware(run_limit=self.max_steps - calls)],
-            )
-            try:
-                result = agent.invoke({"messages": messages})
-            except Exception as e:  # provider failures (auth, rate limit, network): name the agent
-                raise AgentError(f"{self.name}: {type(e).__name__}: {e}") from e
-            out = result.get("structured_response")
-            messages = result["messages"]
-            calls = min(sum(m.type == "ai" for m in messages), self.max_steps)
-            if out is not None or calls >= self.max_steps:
-                break
-            # The model answered in plain text (some providers ignore forced tool choice): remind it.
-            messages = [*messages, ("user", f"Give your answer by calling the `{output_type.__name__}` tool.")]
-        if out is None:
-            last = next(m for m in reversed(messages) if m.type == "ai" and "call limits exceeded" not in str(m.content))
-            raise AgentError(
-                f"{self.name}: no valid {output_type.__name__} after {calls} model calls "
-                f"(limit {self.max_steps}). Last message: {str(last.content)[:300]}"
-            )
+        error = ""
+        try:
+            while True:
+                agent = create_agent(
+                    model=self.model,
+                    tools=self.tools,
+                    system_prompt=self.system_prompt,
+                    response_format=ToolStrategy(output_type),
+                    middleware=[ModelCallLimitMiddleware(run_limit=self.max_steps - calls)],
+                )
+                try:
+                    result = agent.invoke({"messages": messages})
+                except Exception as e:  # provider failures (auth, rate limit, network): name the agent
+                    raise AgentError(f"{self.name}: {type(e).__name__}: {e}") from e
+                out = result.get("structured_response")
+                messages = result["messages"]
+                calls = min(sum(m.type == "ai" for m in messages), self.max_steps)
+                if out is not None or calls >= self.max_steps:
+                    break
+                # The model answered in plain text (some providers ignore forced tool choice): remind it.
+                messages = [*messages, ("user", f"Give your answer by calling the `{output_type.__name__}` tool.")]
+            if out is None:
+                last = next(
+                    m for m in reversed(messages) if m.type == "ai" and "call limits exceeded" not in str(m.content)
+                )
+                raise AgentError(
+                    f"{self.name}: no valid {output_type.__name__} after {calls} model calls "
+                    f"(limit {self.max_steps}). Last message: {str(last.content)[:300]}"
+                )
+        except AgentError as e:
+            error = str(e)
+            raise
+        finally:  # also when the run failed: that is when the reasoning is needed most
+            turns = [turn(m) for m in convert_to_messages([("system", self.system_prompt), *messages])]
+            self.record(AgentRun(agent=self.name, messages=turns, error=error))
         return self.output_type.model_validate(out.model_dump()) if check else out

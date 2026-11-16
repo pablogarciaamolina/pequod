@@ -41,6 +41,7 @@ informal; a channel marked for work topics or short nudges keeps to that.
 - Each wave moves the path one subgoal forward. Do not plan a wave that only repeats the previous one.
 
 Rules:
+- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - Every send_at is later than the current time you are given, falls inside the channel's `hours` in the \
 persona's timezone, and later waves come after earlier ones.
 - The first waves of different paths should use different channels.

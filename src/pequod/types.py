@@ -144,6 +144,14 @@ class WaveRecord(BaseModel):
     reason: StopReason | None = None  # why the loop stopped after this wave; None = it continued
 
 
+class AgentRun(BaseModel):
+    """One line of agents.jsonl: one run of one agent, from its prompt to its answer or its error."""
+
+    agent: str
+    messages: list[dict]  # in order: type, content, and for a model turn its reasoning and tool calls
+    error: str = ""  # why the run gave no valid output
+
+
 # --- agent outputs that wrap a list ---
 
 class Paths(BaseModel):

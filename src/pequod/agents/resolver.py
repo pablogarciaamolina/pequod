@@ -29,6 +29,7 @@ recommended reply is a short closing note that leaves the door open.
 
 Rules:
 - Use only facts from the graph. Do not invent facts, links or promises.
+- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - The conversational angle applies only to the recommended reply.
 - Be brief and concrete. The supervisor should be able to act after one read."""
 

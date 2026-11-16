@@ -10,7 +10,7 @@ from pathlib import Path as FilePath
 
 from pequod.graph import KnowledgeGraph
 from pequod.types import (
-    Interaction, Message, Path, Reply, Resolution, SentLine, Status, StopReason, StopSignal, WaveRecord,
+    AgentRun, Interaction, Message, Path, Reply, Resolution, SentLine, Status, StopReason, StopSignal, WaveRecord,
 )
 
 log = logging.getLogger(__name__)
@@ -59,7 +59,8 @@ def card(record: WaveRecord) -> str:
 
 class Trace:
     """The record of one run in its folder, all UTF-8: trace.jsonl (one line per wave), messages.jsonl
-    (every message in full), graph_<n>.json, status.json (what the engine is doing now), report.md."""
+    (every message in full), agents.jsonl (every run of every agent: prompt, reasoning, tool calls, answer),
+    graph_<n>.json, status.json (what the engine is doing now), report.md."""
 
     def __init__(self, folder: str | FilePath, register: bool = True) -> None:
         """`register=False`: nothing of what was planned, said or learned is stored; only a status
@@ -129,6 +130,16 @@ class Trace:
 
     def messages(self) -> list[Message]:
         return [Message.model_validate_json(text) for text in self._lines(self.folder / "messages.jsonl")]
+
+    # --- what each agent thought and did ---
+
+    def agent(self, run: AgentRun) -> None:
+        """Register one run of an agent when it ends, with or without a valid output."""
+        if self.register:
+            self._append(self.folder / "agents.jsonl", run)
+
+    def agent_runs(self) -> list[AgentRun]:
+        return [AgentRun.model_validate_json(text) for text in self._lines(self.folder / "agents.jsonl")]
 
     # --- what the engine is doing now ---
 

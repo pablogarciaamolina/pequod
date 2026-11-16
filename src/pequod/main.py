@@ -171,6 +171,8 @@ def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> Engag
         resolver=Resolver(model("resolver"), graph, steps["resolver"], angle),
     )
     trace = Trace(folder, run.register)
+    for agent in vars(agents).values():
+        agent.record = trace.agent  # every run of every agent goes to agents.jsonl
     scheduler = Scheduler(channels, operator, run.reply_window_h, now, on_send=trace.sent)
     return EngagementLoop(engagement.objective, agents, channels, scheduler, run.max_iterations, now, graph, trace)
 
