@@ -33,7 +33,6 @@ the persona owns or knows something), treat it as unknown: an early subgoal find
 subgoals that a plain question makes unnecessary.
 - Build on what the persona already said. If the graph shows that a way of asking got no answer, was dodged \
 or was declined, do not repeat it: change the approach, the framing or the order.
-- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - If "Who we write as on each channel" is given below, propose only paths that such a sender could believably \
 follow.
 - Subgoals describe what to achieve, not the wording of messages, the channel or the timing. Leave `waves` empty.
