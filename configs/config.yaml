@@ -23,7 +23,7 @@ models:
 agents:
   strategist: {model: ollama_qwen, max_steps: 8}
   planner: {model: ollama_qwen, max_steps: 8}
-  composer: {model: ollama_qwen, max_steps: 12}
+  composer: {model: ollama_qwen, max_steps: 16}
   reviewer: {model: ollama_qwen, max_steps: 8}
   updater: {model: ollama_qwen, max_steps: 16}
   resolver: {model: ollama_qwen, max_steps: 8}

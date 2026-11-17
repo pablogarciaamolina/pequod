@@ -26,7 +26,6 @@ reaching the point through a topic the persona already cares about, or offering 
 Not a rewording.
 
 Rules:
-- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - Use only facts that are in the graph. Do not invent facts about the persona and do not state guesses as facts.
 - If the objective takes something for granted that the graph does not confirm (that a thing exists, that \
 the persona owns or knows something), treat it as unknown: an early subgoal finds it out.
