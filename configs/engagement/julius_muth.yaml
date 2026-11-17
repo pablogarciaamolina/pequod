@@ -1,4 +1,4 @@
-objective: "Find out the name of Julius's dog, from his own words, through ordinary conversation."
+objective: "Get the target to perform a defined compromising action (for example enter credentials on a look alike login, approve a fake payment request, or reveal information on a call)"
 persona:
   name: Julius Muth
   features:

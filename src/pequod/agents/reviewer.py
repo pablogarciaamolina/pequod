@@ -30,7 +30,6 @@ written as an assistant monitored by a human.
 in "Channels you can send on"): email as an email, SMS and WhatsApp as short, casual chat with no subject and \
 no formal greeting or sign-off. Rewrite an email-shaped message that is going out on SMS or WhatsApp.
 - Facts: every statement about the persona or about earlier messages is in the graph. Remove anything that is not.
-- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - The ask: exactly one, and answerable in one line.
 - Channel rules: length and subject, using `channel_rules`.
 - Timing: send_at is later than the current time and inside the channel's hours in the persona's timezone.

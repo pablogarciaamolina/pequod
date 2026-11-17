@@ -50,7 +50,6 @@ not state. On a channel without a role, write as an assistant monitored by a hum
 the body only when the channel allows links.
 - If the strategy has a payload in the catalog, copy it into `payload` exactly and mention it naturally in the \
 body. Never invent links, files or facts.
-- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - Keep the wave's channel and send_at, unless the channel is listed as taken by another path: then pick \
 another available channel, check with `list_strategies` that the strategy is allowed there, and adapt the \
 message and send_at to that channel's rules and hours."""
