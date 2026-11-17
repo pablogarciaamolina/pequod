@@ -20,16 +20,16 @@ def replies(channel):
 
 
 def test_reply_writes_into_the_hub(capsys):
-    assert cli.reply(["whatsapp", "stock numbers are a day old"]) == 0
-    assert replies("whatsapp") == ["stock numbers are a day old"]
+    assert cli.reply(["melina", "stock numbers are a day old"]) == 0
+    assert replies("melina") == ["stock numbers are a day old"]
     out = capsys.readouterr().out
-    assert "whatsapp" in out and str(Path("runs/mock_hub.db").resolve()) in out  # shows which file was written
+    assert "melina" in out and str(Path("runs/mock_hub.db").resolve()) in out  # shows which file was written
 
 
 def test_reply_unknown_channel(capsys):
     assert cli.reply(["fax", "x"]) == 2
-    assert "email, sms, whatsapp" in capsys.readouterr().err
-    assert all(replies(c) == [] for c in ("email", "sms", "whatsapp"))
+    assert "pepe, stephan, melina" in capsys.readouterr().err
+    assert all(replies(c) == [] for c in ("pepe", "stephan", "melina"))
 
 
 @pytest.mark.parametrize("args", [[], ["sms"], ["sms", "a", "b"], ["sms", "  "]])
@@ -39,16 +39,17 @@ def test_reply_usage(args, capsys):
 
 
 def test_main_dispatches_reply(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["pequod", "reply", "sms", "hi"])
+    monkeypatch.setattr(sys, "argv", ["pequod", "reply", "stephan", "hi"])
     with pytest.raises(SystemExit) as e:
         cli.main()
-    assert e.value.code == 0 and replies("sms") == ["hi"]
+    assert e.value.code == 0 and replies("stephan") == ["hi"]
 
 
 def test_reply_follows_the_channels_of_the_running_run(capsys, tmp_path):
     hub = MockHub("runs/mock_hub.db")
     hub.start_run(tmp_path / "run")
-    hub.set_channels({"email": "someone@customer.test"})
-    assert cli.reply(["sms", "hi"]) == 2
-    assert "Use one of: email" in capsys.readouterr().err
-    assert cli.reply(["email", "hi"]) == 0
+    hub.set_channels({"work": {"platform": "email", "address": "someone@customer.test"}},
+                     {"pepe": {"platform": "email", "target": "work"}})
+    assert cli.reply(["stephan", "hi"]) == 2
+    assert "Use one of: pepe" in capsys.readouterr().err
+    assert cli.reply(["pepe", "hi"]) == 0

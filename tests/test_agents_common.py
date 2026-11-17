@@ -17,13 +17,14 @@ NAMES = ["strategist", "planner", "composer", "reviewer", "updater", "resolver"]
 
 def test_only_the_updater_has_write_tools(graph, catalog, rules):
     m = fake()
+    kinds = {name: name for name in rules}
     agents = [
         Strategist(m, graph, max_steps=4, max_paths=2),
-        Planner(m, graph, catalog, rules, max_steps=4, max_waves=3, angle=""),
-        Composer(m, graph, catalog, rules, max_steps=4, angle=""),
+        Planner(m, graph, catalog, rules, kinds, max_steps=4, max_waves=3, angle=""),
+        Composer(m, graph, catalog, rules, kinds, max_steps=4, angle=""),
         Reviewer(m, graph, rules, max_steps=4, angle=""),
         Updater(m, graph, max_steps=8),
-        Resolver(m, graph, max_steps=4, angle=""),
+        Resolver(m, graph, max_steps=4),
     ]
     assert [a.name for a in agents] == NAMES
     with_write = [a.name for a in agents if WRITE & {t.name for t in a.tools}]

@@ -20,5 +20,5 @@ class StrategyCatalog:
             raise ValueError(f"Unknown strategy '{strategy_id}'. Known strategies: {', '.join(self._strategies)}")
         return self._strategies[strategy_id]
 
-    def for_channel(self, channel: str | None = None) -> dict[str, Strategy]:
-        return {k: s for k, s in self._strategies.items() if channel is None or channel in s.channels}
+    def for_platform(self, platform: str | None = None) -> dict[str, Strategy]:
+        return {k: s for k, s in self._strategies.items() if platform is None or platform in s.platforms}

@@ -210,7 +210,7 @@ def test_config_models_are_valid_specs(cfg):
 
 def test_build_named_uses_the_config(cfg):
     model = build_named(cfg.models, "ollama_qwen")
-    assert isinstance(model, ChatOllama) and model.model == "qwen2.5:14b"
+    assert isinstance(model, ChatOllama) and model.model == "huihui_ai/qwen3.5-abliterated:4b"
 
 
 def test_build_named_unknown_model_raises(cfg):

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import NOW, Clock, FakeOperator
 
+from conftest import personas
 from pequod.channels import build_channels
 from pequod.channels.mock_hub import MockHub
 from pequod.engagement import Operator, Scheduler
@@ -14,7 +15,7 @@ from pequod.types import Interaction
 # NOW is 08:00 UTC
 
 
-def at(hour, channel="email", body="hi"):
+def at(hour, channel="pepe", body="hi"):
     return Interaction(channel=channel, send_at=NOW.replace(hour=hour), body=body)
 
 
@@ -25,7 +26,7 @@ def hub(tmp_path):
 
 def scheduler(cfg, hub, clock, script=(), window=24):
     operator = FakeOperator(clock, script)
-    channels = build_channels(cfg.channels, dict.fromkeys(["email", "sms", "whatsapp"], "x"), hub, clock)
+    channels = build_channels(cfg.channels, personas(cfg), hub, clock)
     return Scheduler(channels, operator, window, clock), operator
 
 
@@ -54,16 +55,16 @@ def test_enter_drops_unsent(cfg, hub):
 
 def test_enter_after_a_send_keeps_what_was_sent(cfg, hub):
     s, _ = scheduler(cfg, hub, Clock(), ["ok"])
-    sent, stop = s.run([at(6), at(12, "sms")])
-    assert [i.channel for i in sent] == ["email"] and stop is False
-    assert [m["channel"] for m in hub.sent()] == ["email"]
+    sent, stop = s.run([at(6), at(12, "stephan")])
+    assert [i.channel for i in sent] == ["pepe"] and stop is False
+    assert [m["channel"] for m in hub.sent()] == ["pepe"]
 
 
 def test_s_sends_everything_now(cfg, hub):
     clock = Clock()
     s, _ = scheduler(cfg, hub, clock, ["send", "ok"])
-    sent, stop = s.run([at(12, "sms"), at(10)])
-    assert [i.channel for i in sent] == ["email", "sms"] and stop is False
+    sent, stop = s.run([at(12, "stephan"), at(10)])
+    assert [i.channel for i in sent] == ["pepe", "stephan"] and stop is False
     assert [m["at"] for m in hub.sent()] == [NOW, NOW]
 
 
@@ -75,9 +76,9 @@ def test_q_stops(cfg, hub):
 def test_two_interactions_are_sent_in_time_order_and_the_window_counts_from_the_last(cfg, hub):
     clock = Clock()
     s, _ = scheduler(cfg, hub, clock, window=1)
-    sent, _ = s.run([at(12, "sms"), at(10)])
-    assert [(m["channel"], m["at"].hour) for m in hub.sent()] == [("email", 10), ("sms", 12)]
-    assert [i.channel for i in sent] == ["email", "sms"]
+    sent, _ = s.run([at(12, "stephan"), at(10)])
+    assert [(m["channel"], m["at"].hour) for m in hub.sent()] == [("pepe", 10), ("stephan", 12)]
+    assert [i.channel for i in sent] == ["pepe", "stephan"]
     assert clock.now == NOW.replace(hour=13)
 
 
@@ -91,7 +92,7 @@ def test_send_at_in_another_timezone(cfg, hub):
     clock = Clock()
     s, _ = scheduler(cfg, hub, clock)
     berlin = datetime(2026, 11, 16, 10, 0, tzinfo=timezone(timedelta(hours=1)))  # 09:00 UTC
-    s.run([Interaction(channel="email", send_at=berlin, body="hi")])
+    s.run([Interaction(channel="pepe", send_at=berlin, body="hi")])
     assert hub.sent()[0]["at"] == NOW.replace(hour=9)
 
 
@@ -116,7 +117,7 @@ def test_operator_closed_stream_returns_none():
 def test_sent_carries_the_real_send_time(cfg, hub):
     """The Updater must record when a message really went out, not when it was planned."""
     s, _ = scheduler(cfg, hub, Clock(), ["send", "ok"])
-    sent, _ = s.run([at(10), at(6, "sms")])
+    sent, _ = s.run([at(10), at(6, "stephan")])
     assert [i.send_at for i in sent] == [NOW, NOW]
 
 
@@ -165,10 +166,10 @@ def test_operator_clear_drops_hub_commands_too(hub):
 def test_scheduler_reports_each_send_with_its_real_time(cfg, hub):
     clock = Clock()
     operator = FakeOperator(clock, ["send", "ok"])
-    channels = build_channels(cfg.channels, dict.fromkeys(["email", "sms", "whatsapp"], "x"), hub, clock)
+    channels = build_channels(cfg.channels, personas(cfg), hub, clock)
     seen = []
-    Scheduler(channels, operator, 24, clock, on_send=seen.append).run([at(10), at(12, "sms")])
-    assert [(i.channel, i.send_at) for i in seen] == [("email", NOW), ("sms", NOW)]
+    Scheduler(channels, operator, 24, clock, on_send=seen.append).run([at(10), at(12, "stephan")])
+    assert [(i.channel, i.send_at) for i in seen] == [("pepe", NOW), ("stephan", NOW)]
 
 
 def test_clear_waits_for_a_command_the_poller_is_just_taking():

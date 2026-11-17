@@ -32,7 +32,16 @@ def write(graph):
 
 @pytest.fixture
 def strategies(cfg):
-    return by_name(strategy_tools(StrategyCatalog.from_config(cfg.strategies)))
+    platforms = {name: c.platform for name, c in cfg.channels.items()}
+    return by_name(strategy_tools(StrategyCatalog.from_config(cfg.strategies), platforms))
+
+
+def test_list_strategies_resolves_the_instance_to_its_kind(cfg):
+    catalog = StrategyCatalog.from_config(cfg.strategies)
+    ls = by_name(strategy_tools(catalog, {"work": "email", "cto": "sms"}))["list_strategies"]
+    assert "form_link" in ls.invoke({"channel": "work"})      # email-only strategy, email instance
+    assert "form_link" not in ls.invoke({"channel": "cto"})   # sms instance excludes it
+    assert ls.invoke({"channel": "nope"}).startswith("Error:") and "work" in ls.invoke({"channel": "nope"})
 
 
 @pytest.fixture
@@ -61,16 +70,16 @@ def test_every_tool_converts_to_a_model_schema(read, write, strategies, channels
 
 
 def test_graph_summary_tool_returns_summary(read):
-    assert "[alex_carter] persona" in read["graph_summary"].invoke({})
+    assert "[julius_muth] persona" in read["graph_summary"].invoke({})
 
 
 def test_find_nodes_tool(read):
-    assert "alex_carter" in read["find_nodes"].invoke({"query": "Northwind"})
+    assert "julius_muth" in read["find_nodes"].invoke({"query": "Revel8"})
     assert read["find_nodes"].invoke({"query": "zzz"}) == "No nodes match 'zzz'."
 
 
 def test_neighbors_tool(read):
-    out = read["neighbors"].invoke({"node_id": "alex_carter"})
+    out = read["neighbors"].invoke({"node_id": "julius_muth"})
     assert "reachable_via" in out and "email" in out
 
 
@@ -92,21 +101,21 @@ def test_add_node_tool_attrs_are_optional(write, graph):
 
 def test_add_edge_tool_writes(write, graph):
     write["add_node"].invoke({"kind": "fact", "name": "Spreadsheets"})
-    write["add_edge"].invoke({"source": "alex_carter", "relation": "uses", "target": "spreadsheets"})
-    assert "uses" in {n["relation"] for n in graph.neighbors("alex_carter")}
+    write["add_edge"].invoke({"source": "julius_muth", "relation": "uses", "target": "spreadsheets"})
+    assert "uses" in {n["relation"] for n in graph.neighbors("julius_muth")}
 
 
 def test_add_edge_tool_unknown_node_returns_error_text(write, graph):
     before = graph.summary()
-    out = write["add_edge"].invoke({"source": "alex_carter", "relation": "uses", "target": "ghost"})
+    out = write["add_edge"].invoke({"source": "julius_muth", "relation": "uses", "target": "ghost"})
     assert out.startswith("Error: Unknown node 'ghost'")
     assert graph.summary() == before
 
 
 def test_update_node_tool_merges(write, graph):
-    write["update_node"].invoke({"node_id": "alex_carter", "attrs": {"mood": "frustrated"}})
-    node = graph.node("alex_carter")
-    assert node["mood"] == "frustrated" and node["org"] == "Northwind Labs"
+    write["update_node"].invoke({"node_id": "julius_muth", "attrs": {"mood": "frustrated"}})
+    node = graph.node("julius_muth")
+    assert node["mood"] == "frustrated" and node["org"] == "Revel8"
 
 
 def test_update_node_tool_unknown_node_returns_error_text(write):
@@ -115,7 +124,7 @@ def test_update_node_tool_unknown_node_returns_error_text(write):
 
 
 def test_list_strategies_tool(strategies):
-    sms = strategies["list_strategies"].invoke({"channel": "sms"})
+    sms = strategies["list_strategies"].invoke({"channel": "stephan"})
     assert "plain_message" in sms and "call_link" in sms and "form_link" not in sms
     assert "https://cal.example/call" in sms
     everything = strategies["list_strategies"].invoke({})
@@ -124,16 +133,16 @@ def test_list_strategies_tool(strategies):
 
 def test_list_strategies_unknown_channel_returns_error_text(strategies):
     out = strategies["list_strategies"].invoke({"channel": "fax"})
-    assert out.startswith("Error:") and "email" in out
+    assert out.startswith("Error:") and "stephan" in out
 
 
 def test_channel_rules_tool(channels):
-    assert "160" in channels["channel_rules"].invoke({"channel": "sms"})
+    assert "160" in channels["channel_rules"].invoke({"channel": "stephan"})
 
 
 def test_channel_rules_unknown_channel_returns_error_text(channels):
     out = channels["channel_rules"].invoke({"channel": "fax"})
-    assert out.startswith("Error:") and "email, sms, whatsapp" in out
+    assert out.startswith("Error:") and "pepe, stephan, melina" in out
 
 
 def test_add_node_tool_reserved_key_returns_error_text(write, graph):
@@ -142,11 +151,11 @@ def test_add_node_tool_reserved_key_returns_error_text(write, graph):
 
 
 def test_find_nodes_tool_uses_the_summary_format(read):
-    assert "[email] channel: email {address: alex@northwind.example" in read["find_nodes"].invoke({"query": "email"})
+    assert "[work_email] channel: work_email {platform: email, address: julius.muth@revel8.ai" in read["find_nodes"].invoke({"query": "email"})
 
 
 def test_neighbors_tool_shows_edge_attrs(read, write):
     write["add_edge"].invoke(
-        {"source": "alex_carter", "relation": "prefers", "target": "email", "attrs": {"since": "2026"}}
+        {"source": "julius_muth", "relation": "prefers", "target": "work_email", "attrs": {"since": "2026"}}
     )
-    assert "-prefers {since: 2026}-> [email]" in read["neighbors"].invoke({"node_id": "alex_carter"})
+    assert "-prefers {since: 2026}-> [work_email]" in read["neighbors"].invoke({"node_id": "julius_muth"})

@@ -5,37 +5,37 @@
 # A base, not a limit: the Planner may also describe a custom strategy in a few words.
 
 # --- Opening: nothing was said yet on this channel ---
-plain_message:   {description: "A plain message with no particular technique. Use when no other strategy fits.", channels: [email, sms, whatsapp]}
-introduce:       {description: "Say who we are and why we write, in one or two sentences, before any question. Use for the first contact on a channel.", channels: [email, sms, whatsapp]}
-warm_opener:     {description: "A short friendly opening about something the graph says the persona cares about, without the real question yet. Use when asking at once would feel abrupt.", channels: [email, whatsapp]}
+plain_message:   {description: "A plain message with no particular technique. Use when no other strategy fits.", platforms: [email, sms, whatsapp]}
+introduce:       {description: "Say who we are and why we write, in one or two sentences, before any question. Use for the first contact on a channel.", platforms: [email, sms, whatsapp]}
+warm_opener:     {description: "A short friendly opening about something the graph says the persona cares about, without the real question yet. Use when asking at once would feel abrupt.", platforms: [email, whatsapp]}
 
 # --- Asking: getting the information or the agreement ---
-direct_ask:       {description: "Ask the one thing we need, plainly, with the reason. Use when the ground is prepared or the question is harmless.", channels: [email, sms, whatsapp]}
-indirect_ask:     {description: "Ask a broader, related question whose natural answer contains what we need. Use when a direct question would feel intrusive or was dodged.", channels: [email, sms, whatsapp]}
-choice_question:  {description: "Offer two to four possible answers and 'something else'. Use when an open question got no answer or the persona writes little.", channels: [email, sms, whatsapp]}
-yes_no_check:     {description: "Ask one thing that can be answered with yes or no. Use to confirm that something is true before asking about it.", channels: [email, sms, whatsapp]}
-assumption_check: {description: "State what we believe, from facts in the graph only, and ask the persona to confirm or correct it. Use when we hold a partial answer.", channels: [email, sms, whatsapp]}
-open_invitation:  {description: "Invite the persona to tell about the topic in their own words, with no specific question. Use early, to collect facts from a persona who likes to write.", channels: [email, whatsapp]}
-shared_interest:  {description: "Connect the question to something the persona said or cares about, taken from the graph. Use when a reply gave us a hook.", channels: [email, sms, whatsapp]}
-give_first:       {description: "Give something first, then ask: a payload from this catalog or a fact from the graph, never an invented offer. Use when the persona has no reason yet to answer.", channels: [email, whatsapp]}
+direct_ask:       {description: "Ask the one thing we need, plainly, with the reason. Use when the ground is prepared or the question is harmless.", platforms: [email, sms, whatsapp]}
+indirect_ask:     {description: "Ask a broader, related question whose natural answer contains what we need. Use when a direct question would feel intrusive or was dodged.", platforms: [email, sms, whatsapp]}
+choice_question:  {description: "Offer two to four possible answers and 'something else'. Use when an open question got no answer or the persona writes little.", platforms: [email, sms, whatsapp]}
+yes_no_check:     {description: "Ask one thing that can be answered with yes or no. Use to confirm that something is true before asking about it.", platforms: [email, sms, whatsapp]}
+assumption_check: {description: "State what we believe, from facts in the graph only, and ask the persona to confirm or correct it. Use when we hold a partial answer.", platforms: [email, sms, whatsapp]}
+open_invitation:  {description: "Invite the persona to tell about the topic in their own words, with no specific question. Use early, to collect facts from a persona who likes to write.", platforms: [email, whatsapp]}
+shared_interest:  {description: "Connect the question to something the persona said or cares about, taken from the graph. Use when a reply gave us a hook.", platforms: [email, sms, whatsapp]}
+give_first:       {description: "Give something first, then ask: a payload from this catalog or a fact from the graph, never an invented offer. Use when the persona has no reason yet to answer.", platforms: [email, whatsapp]}
 
 # --- After a reply ---
-build_on_reply:  {description: "React to what the persona just said, then ask the next thing that follows from it. Use after a reply that did not yet meet the objective.", channels: [email, sms, whatsapp]}
-clarify:         {description: "Quote the persona's vague or partial answer and ask only for the missing piece. Use when a reply came close.", channels: [email, sms, whatsapp]}
-confirm_back:    {description: "Repeat the answer in one line and ask whether we got it right. Use when an answer can be read in two ways.", channels: [email, sms, whatsapp]}
-thank_and_close: {description: "Thank the persona and say that no further question follows. Use after a clear refusal, or to end a topic politely.", channels: [email, sms, whatsapp]}
+build_on_reply:  {description: "React to what the persona just said, then ask the next thing that follows from it. Use after a reply that did not yet meet the objective.", platforms: [email, sms, whatsapp]}
+clarify:         {description: "Quote the persona's vague or partial answer and ask only for the missing piece. Use when a reply came close.", platforms: [email, sms, whatsapp]}
+confirm_back:    {description: "Repeat the answer in one line and ask whether we got it right. Use when an answer can be read in two ways.", platforms: [email, sms, whatsapp]}
+thank_and_close: {description: "Thank the persona and say that no further question follows. Use after a clear refusal, or to end a topic politely.", platforms: [email, sms, whatsapp]}
 
 # --- After silence ---
-gentle_nudge:   {description: "One line that recalls the open question, with no new ask. Use once after a message went unanswered.", channels: [email, sms, whatsapp]}
-rephrase:       {description: "Ask the unanswered question again in different, simpler words. Use when the first wording may have been unclear or too long.", channels: [email, sms, whatsapp]}
-smaller_ask:    {description: "Ask for a smaller or easier part of what we need. Use after silence or hesitation on the full question.", channels: [email, sms, whatsapp]}
-channel_switch: {description: "Take the unanswered question to another channel and say that we also wrote elsewhere. Use when one channel stays silent.", channels: [email, sms, whatsapp]}
+gentle_nudge:   {description: "One line that recalls the open question, with no new ask. Use once after a message went unanswered.", platforms: [email, sms, whatsapp]}
+rephrase:       {description: "Ask the unanswered question again in different, simpler words. Use when the first wording may have been unclear or too long.", platforms: [email, sms, whatsapp]}
+smaller_ask:    {description: "Ask for a smaller or easier part of what we need. Use after silence or hesitation on the full question.", platforms: [email, sms, whatsapp]}
+channel_switch: {description: "Take the unanswered question to another channel and say that we also wrote elsewhere. Use when one channel stays silent.", platforms: [email, sms, whatsapp]}
 
 # --- After hesitation or refusal ---
-explain_why: {description: "Say why we ask and what happens with the answer. Use when the persona asked why, or hesitated.", channels: [email, sms, whatsapp]}
-easy_out:    {description: "Make clear that answering is optional and offer to stop asking. Use after a refusal or a long silence, to keep the door open.", channels: [email, sms, whatsapp]}
+explain_why: {description: "Say why we ask and what happens with the answer. Use when the persona asked why, or hesitated.", platforms: [email, sms, whatsapp]}
+easy_out:    {description: "Make clear that answering is optional and offer to stop asking. Use after a refusal or a long silence, to keep the door open.", platforms: [email, sms, whatsapp]}
 
 # --- With a payload (replace the example links with your own) ---
-info_link: {description: "Share a page with more information. Use when the persona wants to know more before answering.", payload: {url: "https://example.com/info"}, channels: [email, whatsapp]}
-call_link: {description: "Offer a short call instead of writing. Use when the topic is too long for messages.", payload: {url: "https://cal.example/call"}, channels: [email, sms, whatsapp]}
-form_link: {description: "Offer a short form for a longer answer. Use when we need several details at once.", payload: {url: "https://forms.example/questions"}, channels: [email]}
+info_link: {description: "Share a page with more information. Use when the persona wants to know more before answering.", payload: {url: "https://example.com/info"}, platforms: [email, whatsapp]}
+call_link: {description: "Offer a short call instead of writing. Use when the topic is too long for messages.", payload: {url: "https://cal.example/call"}, platforms: [email, sms, whatsapp]}
+form_link: {description: "Offer a short form for a longer answer. Use when we need several details at once.", payload: {url: "https://forms.example/questions"}, platforms: [email]}

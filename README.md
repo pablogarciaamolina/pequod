@@ -1,7 +1,6 @@
 # Pequod
 
-Agentic, multi-wave, multi-channel engine that pursues one objective by engaging a persona across channels. Take-home case for Revel8.
-Demo only. The persona (Alex Carter) and company (Northwind Labs) are fictional.
+Agentic, multi-wave, multi-channel engine that pursues one objective by engaging a persona across channels.
 
 Design: `docs/design-discussion.md`. Decisions taken while building: `docs/DECISIONS.md`.
 
@@ -129,6 +128,7 @@ Every run writes its record into its own folder, `runs/<start time>/`:
 |---|---|
 | `trace.jsonl` | one line per wave: the paths, what was sent, the replies absorbed, the stop signal, the decision |
 | `messages.jsonl` | every message sent and every reply received, in full, in the order they happened |
+| `agents.jsonl` | one line per run of an agent: its prompt, the input, each model turn (text, reasoning, tool calls), each tool result, and the error if it gave no valid output |
 | `status.json` | what the engine is doing right now (read by the simulator) |
 | `graph_0.json`, `graph_1.json`, ... | the knowledge graph over time. `graph_0` is the start; `graph_<n>` is the graph after the replies of wave n were absorbed. Wave n was planned from `graph_<n-1>`. |
 | `report.md` | the final report for the supervisor, with the stop reason on the first line |
@@ -156,6 +156,10 @@ With `channels=live` the engine sends real messages and reads real replies. Noth
 | WhatsApp | The Twilio WhatsApp sandbox; the recipient first sends the sandbox's join code to Twilio's number | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` |
 
 Phone numbers are written with the country code, for example `+34600111222`.
+
+The variable names above are what the default `live.yaml` reads. Each system channel names its own credential variables, so
+two system channels on the same platform use two real mailboxes/numbers: `configs/channels/live_multi.yaml` reads `EMAIL_WORK_ADDRESS` /
+`EMAIL_WORK_APP_PASSWORD` for one email and `EMAIL_PERSONAL_ADDRESS` / `EMAIL_PERSONAL_APP_PASSWORD` for the other.
 
 **2. Who receives the messages.** Open `configs/engagement/live_test.yaml` and replace the placeholder addresses by your own
 test addresses. Do not commit this file with real addresses in it. You can delete a channel you do not use; with one channel
@@ -192,7 +196,7 @@ Limits:
 uv run pequod run.register=false
 ```
 
-With `run.register=false` (mock or live) the run folder gets no `trace.jsonl`, `messages.jsonl`, graph snapshots or `report.md`,
+With `run.register=false` (mock or live) the run folder gets no `trace.jsonl`, `messages.jsonl`, `agents.jsonl`, graph snapshots or `report.md`,
 and `main.log` keeps the engine's steps without the message texts and without the report. Everything is still shown in the
 terminal. `pequod explain` cannot explain such a run. Two things are still stored: the run's settings in `runs/<start time>/.hydra/`
 (they include the engagement file), and, in mock mode, the current run's messages in the mock hub until the next run starts.
@@ -204,12 +208,13 @@ terminal. `pequod explain` cannot explain such a run. Two things are still store
 | You want to change | File | Reinstall? |
 |---|---|---|
 | The persona, the objective, their channels | `configs/engagement/<name>.yaml` | no |
-| The tone | `configs/angle/<name>.yaml` | no |
+| The tone of one channel | that channel's `angle:` in `configs/channels/*.yaml` (names a file in `configs/angle/`) | no |
+| The wording of a tone | `configs/angle/<name>.yaml` | no |
 | What an agent is told | `PROMPT` in `src/pequod/agents/<agent>.py` | no |
 | What an agent must return | the classes in `src/pequod/types.py` | no |
 | The catalog of strategies and their links | `configs/strategies/<name>.yaml` | no |
 | Length and subject rules of a channel | `rules` in `configs/channels/mock.yaml` and `live.yaml` | no |
-| A new channel or a second account | `src/pequod/channels/`, `configs/channels/` | no |
+| A second account on a platform (e.g. a 2nd sender, or a 2nd persona mailbox) | a persona channel in `configs/engagement/<name>.yaml` and a system channel targeting it in `configs/channels/*.yaml` — config only, no code | no |
 | Which model each agent uses, step limits | `agents` and `models` in `configs/config.yaml` | no |
 | Loop limits, reply window | `run` in `configs/config.yaml` | no |
 | A new Python package | `pyproject.toml` | `uv sync` |
@@ -223,11 +228,16 @@ Two ways to use a config change:
 A tip that saves broken tests: for a new persona, tone or strategy set, **add a new file and select it**
 (`engagement=acme`, `angle=direct`, `strategies=rich`) instead of editing the default one. Several tests check the content of the default files.
 
-### A new persona (engagement)
+### A new persona (engagement) and its channels
 
-Copy `configs/engagement/alex_carter.yaml` to `configs/engagement/acme.yaml` and edit it:
+A run needs **two** files that fit together: the engagement (the persona and their own accounts) and a channels file
+(the accounts we send from, each targeting one of the persona's accounts). Copy `configs/engagement/julius_muth.yaml` and
+`configs/channels/mock.yaml` and edit both.
+
+The engagement — the persona's accounts, each with a `platform`:
 
 ```yaml
+# configs/engagement/acme.yaml
 objective: "Find out which accounting software the persona uses."
 persona:
   name: Jamie Rivera
@@ -236,39 +246,97 @@ persona:
     timezone: Europe/Madrid
     comms_style: formal
     notes: "Complained about invoice delays in March."
-channels:                   # only channels listed here are used; each needs an entry in configs/channels/
-  email:
+channels:                   # the persona's own accounts; every one needs a system channel below that targets it
+  work_inbox:
+    platform: email
     address: jamie@acme.example
     features: {hours: "09-13", notes: "prefers email"}   # free keys; the Planner reads them
-  whatsapp:
+  mobile:
+    platform: whatsapp
     address: "+00 000 000"
     features: {hours: "10-18"}
 ```
 
+The channels file — the accounts we send from; each `target` is a persona channel above, same `platform`:
+
+```yaml
+# configs/channels/acme_mock.yaml
+me_finance:
+  platform: email
+  target: work_inbox        # must be a channel of configs/engagement/acme.yaml, and also email
+  mode: mock
+  role: "A finance vendor following up on a demo."
+  angle: curiosity
+  rules: {max_length: 2000, subject: true, links_ok: true}
+hr:
+  platform: whatsapp
+  target: mobile
+  mode: mock
+  role: "A friendly contact from the persona's network."
+  angle: familiarity
+  rules: {max_length: 1000, subject: false, links_ok: true}
 ```
-uv run pequod engagement=acme
+
+```
+uv run pequod engagement=acme channels=acme_mock
 ```
 
 - Everything under `features` is free text for the agents. Nothing in code depends on the key names. The prompts refer to the
   persona's timezone and communication style and to each channel's `hours` and notes, so keeping keys with those names helps.
-- `run.max_paths` must not be larger than the number of channels.
+- `run.max_paths` must not be larger than the number of **system** channels (each path takes its own channel).
 
-### The tone (angle)
+### Two sides: persona channels and system channels
 
-One file per angle in `configs/angle/`: `clarity`, `empathy`, `reassurance`, `curiosity`, `helpfulness`.
+Channels have two sides, in two files:
+
+- **The persona's channels** (`configs/engagement/<name>.yaml`) are the persona's own accounts. Each has a **platform**
+  (`email`, `sms` or `whatsapp`), an address and features. A persona may have several, even on the same platform
+  (`work_email` and `personal_email` are both `email`).
+- **The system's channels** (`configs/channels/*.yaml`) are *our* accounts — who we write as. Each has a platform, its own
+  role/angle/rules/credentials, and a **`target`**: the persona channel it talks to. A system channel may only target a
+  persona channel of the **same platform**, and several system channels may target the same persona account (two senders into
+  one inbox). The engine's agents plan and send on the **system** channels; `pequod reply`/the simulator name them too.
+
+Adding an account is **config only, no code**: add a persona channel to the engagement and a system channel in the channels
+file that targets it (same platform; in live mode its own credential variables). A platform mismatch or a missing target
+stops the run at startup with a clear message. See `configs/engagement/multi_demo.yaml` with `configs/channels/mock_multi.yaml`
+— two senders into one work inbox, a second (personal) inbox, and a WhatsApp:
+
+```
+uv run pequod engagement=multi_demo channels=mock_multi
+```
+
+The simulator shows each persona account with its threads (one per system sender) nested inside it; you reply to a thread.
+
+### The tone (angle), per channel
+
+The angle is **per channel**, not one tone for the whole run: each channel can lean on a different tone. The library of
+tones lives in `configs/angle/` (one file each: `authority`, `curiosity`, `familiarity`, `fear`, `urgency`), and every
+channel names one with its `angle:` field in `configs/channels/*.yaml`:
 
 ```yaml
-# configs/angle/direct.yaml
+# configs/channels/mock.yaml  (system channels)
+pepe:
+  platform: email
+  target: work_email
+  angle: authority     # formal, work tone from this sender
+  ...
+stephan:
+  platform: sms
+  target: company_sms
+  angle: urgency       # a different tone on SMS
+  ...
+```
+
+```yaml
+# configs/angle/direct.yaml  (add a tone to the library)
 name: direct
 text: "Be direct: say what you need in the first sentence and give one deadline."
 ```
 
-```
-uv run pequod angle=direct
-```
-
-The `text` is added at the end of the prompt of the Planner, Composer, Reviewer and Resolver as "Conversational angle: ...".
-The Strategist and the Updater do not get it.
+The engine reads each channel's angle file and builds one block, "Conversational angle per channel: - <channel>: <text> …",
+appended to the prompt of the Planner, Composer and Reviewer. The Strategist, Updater and Resolver do not get it. A channel
+whose `angle:` names a missing file stops the run at startup with a clear message.
 
 ### The prompts
 
@@ -278,7 +346,7 @@ What a model sees for one agent, in this order:
 
 | Part | Where it comes from |
 |---|---|
-| System prompt | `PROMPT` in the agent's file, plus the angle for four agents |
+| System prompt | `PROMPT` in the agent's file, plus the per-channel angle block for the Planner, Composer and Reviewer |
 | User message | built in the agent's `run()` method in the same file (objective, paths, drafts, replies, current time, limits) |
 | Tools | set in the agent's `__init__`: graph read tools for all; `list_strategies` and `channel_rules` for some; graph write tools for the Updater only |
 | Answer format | the agent's output class in `src/pequod/types.py`. Its docstring and field descriptions are shown to the model, so they are part of the prompt. |
@@ -350,26 +418,26 @@ How the agents use the catalog:
 
 ### Who the engine writes as (role)
 
-You state the role, per channel, in the channel config: who we write as on that channel. It can be any character
-or company. Set it to match the account the channel sends from. An empty role means "an assistant monitored by a human".
+You state the role per **system channel** (our account), in the channel config: who we write as on that channel. It can be
+any character or company — set it to match the account that sends. An empty role means "an assistant monitored by a human".
 
 ```yaml
-# configs/channels/mock.yaml and configs/channels/live.yaml (keep both the same)
-email:
-  role: "Sam from Paws & Co, a small pet shop. Writes to customers about their pets."
-whatsapp:
+# configs/channels/mock.yaml and configs/channels/live.yaml (keep the rules the same in both)
+pepe:
+  role: "Pepe Salgado from Valladolid FC, a vendor Revel8 works with."
+melina:
   role: ""
 ```
 
 Or for one run, without editing a file:
 
 ```
-uv run pequod "channels.email.role='Sam from Paws & Co, a small pet shop'"
+uv run pequod "channels.pepe.role='Pepe Salgado from Valladolid FC'"
 ```
 
 - The roles are added to the system prompt of the Strategist, Planner, Composer and Reviewer, before the angle,
-  as a list "Who we write as on each channel". Only the channels of the engagement are listed.
-- No agent chooses or changes a role. The Composer writes each message as the role of its channel.
+  as a list "Who we write as on each channel". Only the system channels of the run are listed.
+- No agent chooses or changes a role. The Composer writes each message as the role of its system channel.
 - What a role may never do is one line starting with "Limits:" in the `PROMPT` of the Strategist, Planner, Composer,
   Reviewer and Resolver. It exists only there: to change it, edit it in those five files (a test checks they match).
 - This overrides design line 47 ("the client already knows an engine answers"), see D64.
@@ -389,37 +457,26 @@ A channel has three parts:
 
 **Use fewer channels:** remove them from the engagement file. Nothing else is needed.
 
-**A second account on the same platform** (for example a second mailbox, `email_sales`). The engine has one sender per channel name,
-so a second account is a second channel:
+**A second account on the same platform** (for example a second sender into the work inbox, or a second persona mailbox) is
+**config only, no code**:
 
-1. In `src/pequod/channels/email.py`, add two small classes:
+1. If it is a new persona account, add it under `channels` in the engagement file with its `platform`, address and features.
+2. In `configs/channels/mock.yaml` (and `live.yaml`), add a system channel: a name of your choice with `platform`, a `target`
+   (the persona channel it reaches, same platform), `mode`, `role`, `angle`, `rules`, and in live mode its own `credentials`
+   variables (for a truly separate mailbox, point them at new `.env` variables, as `configs/channels/live_multi.yaml` shows).
 
-   ```python
-   class EmailSalesMock(EmailMock):
-       name = "email_sales"
+Several system channels may share one `target` (two senders into one inbox). The same works for a second Twilio sender.
+`configs/engagement/multi_demo.yaml` + `configs/channels/mock_multi.yaml` is a worked example.
 
-   class EmailSalesLive(EmailLive):
-       name = "email_sales"
-   ```
+**A new platform** (for example Telegram) *does* need code: write a mock class (three lines, on `MockChannel`, with
+`platform = "telegram"`) and a live class with `send(interaction) -> id`, `fetch_replies(since) -> list[Reply]` and
+`from_config(name, rules, address, settings, secrets)`, following `EmailLive` or `TwilioChannel`; add both to the `MOCKS`/`LIVE`
+lists in `src/pequod/channels/__init__.py`; and add `telegram` to the `platforms` of the strategies that may use it. A live
+class must raise `ChannelError` for platform failures and must never put a credential into an error text.
 
-2. In `src/pequod/channels/__init__.py`, add them to the two lists that build `MOCKS` and `LIVE`.
-3. In `configs/channels/mock.yaml` and `live.yaml`, add an `email_sales` entry (copy the `email` entry). In `live.yaml`, point its
-   `credentials` at other variables, for example `{user: EMAIL_SALES_ADDRESS, password: EMAIL_SALES_APP_PASSWORD}`, and add those to `.env`.
-4. In the engagement file, add `email_sales` under `channels` with the persona's address and features. The `notes` are the place to say
-   what this account is for ("sales contact; use for offers").
-5. In the strategies file, add `email_sales` to the `channels` of every strategy that may use it.
-
-The same recipe works for a second Twilio number (subclass `SmsLive` or `WhatsAppLive`, with another `sender` variable).
-
-**A new platform** (for example Telegram): write a mock class (three lines, like above, on `MockChannel`) and a live class with
-`send(interaction) -> id`, `fetch_replies(since) -> list[Reply]` and `from_config(rules, address, settings, secrets)`, following
-`EmailLive` or `TwilioChannel`. Then steps 2 to 5 as above. A live class must raise `ChannelError` for platform failures and must never put a
-credential into an error text.
-
-After adding a channel name:
-- `tests/test_config.py` expects the default channel files and the default engagement to list the same channels. Update that test, or add the new
-  channel to `alex_carter.yaml` too.
-- In the simulator the new channel appears in the list under its name, with chat-style messages.
+After adding a channel:
+- The simulator shows the persona account with the new thread nested under it.
+- A live channel is tried without a model by `uv run pequod check <system-channel> engagement=<file>`.
 
 ### Models and step limits
 

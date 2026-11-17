@@ -23,7 +23,8 @@ ask_indirectly, follow_up, clarify, confirm. You may use a new intent when none 
 - strategy: how the contact is made. Use a strategy id from `list_strategies`, or describe a custom strategy \
 in a few words. A custom strategy may use plain text or a payload from the catalog only. Never invent links \
 or assets.
-- channel: one of the persona's channels in the graph. Check that the strategy is allowed on that channel.
+- channel: one of the channels listed under "Channels you can send on". Each reaches the persona on one \
+platform; pick the one whose platform and persona account fit the content. Check the strategy is allowed there.
 - send_at: when to send it, as ISO 8601 with UTC offset.
 
 How to work:
@@ -41,7 +42,6 @@ informal; a channel marked for work topics or short nudges keeps to that.
 - Each wave moves the path one subgoal forward. Do not plan a wave that only repeats the previous one.
 
 Rules:
-- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
 - Every send_at is later than the current time you are given, falls inside the channel's `hours` in the \
 persona's timezone, and later waves come after earlier ones.
 - The first waves of different paths should use different channels.
@@ -58,12 +58,13 @@ class Planner(Agent):
         graph: KnowledgeGraph,
         catalog: StrategyCatalog,
         rules: dict[str, ChannelRules],
+        platforms: dict[str, str],
         max_steps: int,
         max_waves: int,
         angle: str,
         role: str = "",
     ) -> None:
-        tools = read_tools(graph) + strategy_tools(catalog) + channel_tools(rules)
+        tools = read_tools(graph) + strategy_tools(catalog, platforms) + channel_tools(rules)
         super().__init__("planner", model, PROMPT, tools, Paths, max_steps, angle, role)
         self.max_waves = max_waves
 

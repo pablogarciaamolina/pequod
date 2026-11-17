@@ -35,11 +35,11 @@ def test_tool_calls_write_into_the_graph(graph):
     run(
         graph,
         call("add_node", kind="reply", name="Reply 1", attrs={"summary": "stock numbers are a day old"}),
-        call("add_edge", source="reply_1", relation="received_on", target="whatsapp"),
+        call("add_edge", source="reply_1", relation="received_on", target="personal_whatsapp"),
         nothing(),
     )
     assert graph.node("reply_1")["summary"] == "stock numbers are a day old"
-    assert "whatsapp" in {n["node"]["id"] for n in graph.neighbors("reply_1")}
+    assert "personal_whatsapp" in {n["node"]["id"] for n in graph.neighbors("reply_1")}
 
 
 def test_returns_stop_signal_with_evidence(graph):

@@ -28,7 +28,7 @@ class KnowledgeGraph:
         graph = cls()
         persona = graph.add_node("persona", engagement.persona.name, engagement.persona.features)
         for name, spec in engagement.channels.items():
-            channel = graph.add_node("channel", name, {"address": spec.address, **spec.features})
+            channel = graph.add_node("channel", name, {"platform": spec.platform, "address": spec.address, **spec.features})
             graph.add_edge(persona, "reachable_via", channel)
         return graph
 

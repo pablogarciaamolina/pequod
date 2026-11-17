@@ -24,11 +24,14 @@ def text(interaction: Interaction) -> str:
 
 
 class Channel(ABC):
-    """One way to reach the persona. Mock and live versions share this interface."""
+    """One conversation with the persona on one platform. `platform` names the platform (and its
+    implementation); `name` is the instance id (the engagement/channels key), so one persona can
+    have several conversations of the same platform. Mock and live versions share this interface."""
 
-    name: str
+    platform: str
 
-    def __init__(self, rules: ChannelRules) -> None:
+    def __init__(self, name: str, rules: ChannelRules) -> None:
+        self.name = name
         self.rules = rules
 
     def accept(self, interaction: Interaction) -> None:
@@ -47,8 +50,8 @@ class Channel(ABC):
 class MockChannel(Channel):
     """Reads and writes the mock hub instead of a real platform."""
 
-    def __init__(self, rules: ChannelRules, hub: MockHub, clock: Callable[[], datetime]) -> None:
-        super().__init__(rules)
+    def __init__(self, name: str, rules: ChannelRules, hub: MockHub, clock: Callable[[], datetime]) -> None:
+        super().__init__(name, rules)
         self.hub = hub
         self.clock = clock
 

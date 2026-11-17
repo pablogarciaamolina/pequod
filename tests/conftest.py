@@ -10,6 +10,11 @@ def load(overrides=()):
         return compose(config_name="config", overrides=list(overrides))
 
 
+def personas(cfg):
+    """The persona channels (name -> {platform, address}) that build_channels pairs system channels to."""
+    return {name: {"platform": c.platform, "address": c.address} for name, c in cfg.engagement.channels.items()}
+
+
 @pytest.fixture
 def cfg():
     return load()
@@ -62,9 +67,11 @@ NOW = datetime(2026, 11, 16, 8, 0, tzinfo=timezone.utc)
 READ = {"graph_summary", "find_nodes", "neighbors"}
 WRITE = {"add_node", "add_edge", "update_node"}
 ANGLE = "Lean on clarity."
+# The default engagement's system channels (what the agent sends on) -> their platform.
+PLATFORM = {"pepe": "email", "stephan": "sms", "melina": "whatsapp"}
 
 
-def wave(channel="email", intent="open_door", hour=10):
+def wave(channel="pepe", intent="open_door", hour=10):
     return {
         "intent": intent,
         "strategy": "plain_message",
@@ -77,7 +84,7 @@ def path(*waves, subgoal="Learn which reports are slow"):
     return {"subgoals": [subgoal, "Find the cause"], "rationale": "Start from the stated symptom", "waves": list(waves)}
 
 
-def interaction(channel="email", body="Hi Alex, which report is slowest?"):
+def interaction(channel="pepe", body="Hi Alex, which report is slowest?"):
     return {"channel": channel, "send_at": "2026-11-16T10:00:00+01:00", "body": body}
 
 

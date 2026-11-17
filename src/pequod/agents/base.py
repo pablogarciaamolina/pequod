@@ -76,8 +76,10 @@ class Agent:
     ) -> None:
         self.name = name
         self.model = model
+        # `angle` is a ready-made block (its own header), built per channel by main.build_loop;
+        # `role` is the per-channel "who we write as" block. Both are appended as given.
         self.system_prompt = (
-            system_prompt + (f"\n\n{role}" if role else "") + (f"\n\nConversational angle: {angle}" if angle else "")
+            system_prompt + (f"\n\n{role}" if role else "") + (f"\n\n{angle}" if angle else "")
         )
         self.tools = tools
         self.output_type = output_type

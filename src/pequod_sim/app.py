@@ -29,11 +29,13 @@ class CommandIn(BaseModel):
     command: str
 
 
-def create_app(hub: MockHub, channels: dict[str, str], refresh_s: float) -> FastAPI:
-    """`channels` (name -> the persona's address) is used until a run has told the hub its own channels."""
+def create_app(hub: MockHub, channels: dict[str, dict], refresh_s: float) -> FastAPI:
+    """`channels` ({'persona': {name: {platform, address}}, 'system': {name: {platform, target}}}) is the
+    fallback used until a run has told the hub its own channels."""
     app = FastAPI(title="Pequod simulator")
 
-    def current() -> dict[str, str]:
+    def current() -> dict[str, dict]:
+        """{'persona': {name: {platform, address}}, 'system': {name: {platform, target}}}."""
         return hub.channels() or channels
 
     @app.get("/")
@@ -53,20 +55,31 @@ def create_app(hub: MockHub, channels: dict[str, str], refresh_s: float) -> Fast
                 run["status"] = status.model_dump(mode="json") if status else None
                 run["waves"] = [record.model_dump(mode="json") for record in trace.records()]
                 run["report"] = trace.read_report()
+        chans = current()
+        persona, system = chans["persona"], chans["system"]
         return {
             "refresh_s": refresh_s,
-            "channels": [
-                {"name": name, "address": address, "messages": [m.model_dump(mode="json") for m in hub.conversation(name)]}
-                for name, address in current().items()
+            # the persona's accounts, each with the threads (one per system channel targeting it) nested inside
+            "accounts": [
+                {
+                    "name": pname, "platform": pinfo["platform"], "address": pinfo["address"],
+                    "threads": [
+                        {"name": sname, "platform": sinfo["platform"],
+                         "messages": [m.model_dump(mode="json") for m in hub.conversation(sname)]}
+                        for sname, sinfo in system.items() if sinfo["target"] == pname
+                    ],
+                }
+                for pname, pinfo in persona.items()
             ],
             "run": run,
         }
 
     @app.post("/api/reply")
     def reply(body: ReplyIn) -> dict:
-        """The person playing the persona answers on one channel."""
-        if body.channel not in current():
-            raise HTTPException(422, f"Unknown channel '{body.channel}'. Use one of: {', '.join(current())}")
+        """The person playing the persona answers on one thread (a system channel)."""
+        threads = current()["system"]
+        if body.channel not in threads:
+            raise HTTPException(422, f"Unknown thread '{body.channel}'. Use one of: {', '.join(threads)}")
         if not body.text.strip():
             raise HTTPException(422, "The reply is empty.")
         hub.add_reply(body.channel, body.text.strip(), now())
@@ -89,7 +102,10 @@ def main() -> None:
     with initialize_config_dir(config_dir=CONFIGS, version_base=None):
         engine = compose(config_name="config")
     own = OmegaConf.load(Path(CONFIGS) / "sim.yaml")
-    channels = {name: channel.address for name, channel in engine.engagement.channels.items()}
+    channels = {
+        "persona": {name: {"platform": spec.platform, "address": spec.address} for name, spec in engine.engagement.channels.items()},
+        "system": {name: {"platform": engine.channels[name].platform, "target": engine.channels[name].target} for name in engine.channels},
+    }
     hub = MockHub(engine.mock_hub)
     print(f"Pequod simulator: http://{own.host}:{own.port}  (stop with Ctrl+C)")
     print(f"Hub: {hub.path.resolve()}  (start `pequod` in the same folder)")

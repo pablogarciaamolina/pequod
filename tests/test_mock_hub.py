@@ -145,7 +145,10 @@ def test_two_callers_never_take_the_same_command(hub):
 def test_hub_remembers_the_channels_of_the_current_run(hub, tmp_path):
     assert hub.channels() is None
     hub.start_run(tmp_path / "one")
-    hub.set_channels({"email": "alex@northwind.example", "whatsapp": "+00 000 000"})
-    assert hub.channels() == {"email": "alex@northwind.example", "whatsapp": "+00 000 000"}
+    persona = {"work_email": {"platform": "email", "address": "j@x.test"}}
+    system = {"pepe": {"platform": "email", "target": "work_email"}}
+    hub.set_channels(persona, system)
+    assert hub.channels() == {"persona": persona, "system": system}
     hub.start_run(tmp_path / "two")  # a new run starts without the old run's channels
     assert hub.channels() is None
+

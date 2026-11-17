@@ -13,6 +13,7 @@ class Persona(BaseModel):
 
 
 class ChannelSpec(BaseModel):
+    platform: str
     address: str
     features: dict[str, str] = {}
 
@@ -31,7 +32,7 @@ class ChannelRules(BaseModel):
 
 class Strategy(BaseModel):
     description: str
-    channels: list[str]
+    platforms: list[str]
     payload: dict[str, str] | None = None
 
 

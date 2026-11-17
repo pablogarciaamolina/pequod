@@ -29,14 +29,12 @@ recommended reply is a short closing note that leaves the door open.
 
 Rules:
 - Use only facts from the graph. Do not invent facts, links or promises.
-- Limits: no pressure, no invented urgency, and never a request for money, passwords or other credentials.
-- The conversational angle applies only to the recommended reply.
 - Be brief and concrete. The supervisor should be able to act after one read."""
 
 
 class Resolver(Agent):
-    def __init__(self, model: BaseChatModel, graph: KnowledgeGraph, max_steps: int, angle: str) -> None:
-        super().__init__("resolver", model, PROMPT, read_tools(graph), Resolution, max_steps, angle)
+    def __init__(self, model: BaseChatModel, graph: KnowledgeGraph, max_steps: int) -> None:
+        super().__init__("resolver", model, PROMPT, read_tools(graph), Resolution, max_steps)
 
     def run(self, reason: StopReason, signal: StopSignal, objective: str) -> Resolution:
         message = (

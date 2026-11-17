@@ -46,17 +46,18 @@ def test_model_sees_prompt_tools_and_message(pings):
     assert set(model.bound) == {"ping", "StopSignal"}
 
 
-def test_angle_is_appended_to_the_prompt(pings):
+def test_angle_block_is_appended_to_the_prompt(pings):
     model = fake(STOP)
-    agent(model, pings, angle="Lean on clarity").invoke("go")
-    assert model.seen[0][0].content == PROMPT + "\n\nConversational angle: Lean on clarity"
+    block = "Conversational angle per channel:\n- email: Lean on clarity"
+    agent(model, pings, angle=block).invoke("go")
+    assert model.seen[0][0].content == PROMPT + "\n\n" + block
 
 
 def test_role_is_appended_before_the_angle(pings):
     model = fake(STOP)
-    agent(model, pings, angle="Lean on clarity", role="On email: Sam from a pet shop").invoke("go")
+    agent(model, pings, angle="angle: Lean on clarity", role="On email: Sam from a pet shop").invoke("go")
     system = model.seen[0][0].content
-    assert system.startswith(PROMPT) and system.endswith("Conversational angle: Lean on clarity")
+    assert system.startswith(PROMPT) and system.endswith("angle: Lean on clarity")
     assert "On email: Sam from a pet shop" in system[len(PROMPT):]
 
 
@@ -127,3 +128,40 @@ def test_provider_error_becomes_an_agent_error_naming_the_agent(pings):
 
     with pytest.raises(AgentError, match="tester: ConnectionError: no route to host"):
         agent(Broken(messages=iter([])), pings).invoke("go")
+
+
+# --- the record of a run: every message of the loop, with the model's reasoning ---
+
+
+def test_a_run_is_recorded_with_reasoning_tool_calls_and_tool_results(pings):
+    thinking = AIMessage(
+        content="I will ping first.",
+        additional_kwargs={"reasoning_content": "Nothing is known yet, so ping."},
+        tool_calls=[{"name": "ping", "args": {}, "id": "1"}],
+    )
+    runs = []
+    a = agent(fake(thinking, STOP), pings)
+    a.record = runs.append
+    a.invoke("go")
+    (run,) = runs
+    assert run.agent == "tester" and run.error == ""
+    assert run.messages[:2] == [{"type": "system", "content": PROMPT}, {"type": "human", "content": "go"}]
+    assert run.messages[2] == {
+        "type": "ai",
+        "content": "I will ping first.",
+        "reasoning": "Nothing is known yet, so ping.",
+        "tool_calls": [{"name": "ping", "args": {}}],
+    }
+    assert run.messages[3] == {"type": "tool", "content": "pong", "name": "ping"}
+    assert run.messages[4]["tool_calls"] == [{"name": "StopSignal", "args": {"opt_out": True, "evidence": "stop"}}]
+
+
+def test_a_failed_run_is_recorded_with_its_error(pings):
+    runs = []
+    a = agent(fake(*(AIMessage(content="I refuse.") for _ in range(4))), pings)
+    a.record = runs.append
+    with pytest.raises(AgentError):
+        a.invoke("go")
+    (run,) = runs
+    assert run.error.startswith("tester: no valid StopSignal after 4 model calls")
+    assert {"type": "ai", "content": "I refuse."} in run.messages

@@ -53,9 +53,10 @@ def reply(args: list[str]) -> int:
     with initialize_config_dir(config_dir=CONFIGS, version_base=None):
         cfg = compose(config_name="config")
     hub = MockHub(cfg.mock_hub)
-    channels = hub.channels() or cfg.engagement.channels  # the running run's channels, if a run has started
-    if channel not in channels:
-        print(f"Unknown channel '{channel}'. Use one of: {', '.join(channels)}", file=sys.stderr)
+    stored = hub.channels()  # the running run's channels, if a run has started
+    names = list(stored["system"]) if stored else list(cfg.channels)
+    if channel not in names:
+        print(f"Unknown channel '{channel}'. Use one of: {', '.join(names)}", file=sys.stderr)
         return 2
     hub.add_reply(channel, text, now())
     print(f"Reply stored on {channel} ({hub.path.resolve()}).")
@@ -93,15 +94,16 @@ def check(args: list[str]) -> int:
     except HydraException as e:
         print(f"{CHECK_USAGE}  [{str(e).splitlines()[0]}]", file=sys.stderr)
         return 2
-    if name not in cfg.engagement.channels:
-        print(f"Unknown channel '{name}'. Use one of: {', '.join(cfg.engagement.channels)}", file=sys.stderr)
+    if name not in cfg.channels:
+        print(f"Unknown channel '{name}'. Use one of: {', '.join(cfg.channels)}", file=sys.stderr)
         return 2
     if cfg.channels[name].mode != "live":
         print(f"`pequod check` is for live channels; {name} is set to {cfg.channels[name].mode}.", file=sys.stderr)
         return 2
-    address = cfg.engagement.channels[name].address
+    persona_channels = {n: {"platform": s.platform, "address": s.address} for n, s in cfg.engagement.channels.items()}
     try:
-        channel = build_channels(cfg.channels, {name: address}, None, now)[name]
+        channel = build_channels({name: cfg.channels[name]}, persona_channels, None, now)[name]
+        address = persona_channels[cfg.channels[name].target]["address"]
         if replies:
             found = channel.fetch_replies(now() - timedelta(hours=24))
             print(f"{len(found)} reply(ies) from {address} on {name} in the last 24 hours.")
@@ -120,11 +122,28 @@ def check(args: list[str]) -> int:
 
 
 def open_hub(cfg: DictConfig) -> MockHub | None:
-    """The mock hub is the simulator's store: used when a mock channel is configured, never in a live run."""
-    used = [cfg.channels[name] for name in cfg.engagement.channels if name in cfg.channels]
-    if not any(channel.mode == "mock" for channel in used):
+    """The mock hub is the simulator's store: used when a mock system channel is configured, never in a live run."""
+    if not any(channel.mode == "mock" for channel in cfg.channels.values()):
         return None
     return MockHub(to_absolute_path(cfg.mock_hub))  # relative to the start folder, like `pequod reply`
+
+
+def angle_block(angles: dict[str, str | None], angle_dir: Path) -> str:
+    """The per-channel conversational angle as one prompt block. `angles` maps each channel instance
+    to the name of a file in `angle_dir` (or None for no angle). A named file that is missing raises,
+    so a typo fails at startup instead of silently dropping the angle."""
+    lines = []
+    for name, which in angles.items():
+        if not which:
+            continue
+        path = angle_dir / f"{which}.yaml"
+        if not path.is_file():
+            raise ValueError(f"Channel '{name}' uses angle '{which}' but {path} does not exist.")
+        data = OmegaConf.load(path)
+        if "text" not in data or not str(data.text).strip():
+            raise ValueError(f"Channel '{name}' uses angle '{which}' but {path} has no 'text'.")
+        lines.append(f"- {name}: {data.text}")
+    return "Conversational angle per channel:\n" + "\n".join(lines) if lines else ""
 
 
 def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> EngagementLoop:
@@ -141,34 +160,44 @@ def build_loop(cfg: DictConfig, operator: Operator, folder: str | Path) -> Engag
     if hub:
         hub.start_run(folder)  # first: the simulator shows this run from now on, also if it fails right below
     engagement = Engagement.model_validate(OmegaConf.to_container(cfg.engagement, resolve=True))
-    run, angle = cfg.run, cfg.angle.text
-    if run.max_paths > len(engagement.channels):
+    run = cfg.run
+    if run.max_paths > len(cfg.channels):
         raise ValueError(
-            f"run.max_paths is {run.max_paths} but the engagement has {len(engagement.channels)} channels; "
+            f"run.max_paths is {run.max_paths} but there are {len(cfg.channels)} system channels; "
             "each path needs its own channel"
         )
-    addresses = {name: channel.address for name, channel in engagement.channels.items()}
-    if hub:
-        hub.set_channels(addresses)  # the simulator and `pequod reply` follow the run, not the default config
-    channels = build_channels(cfg.channels, addresses, hub, now)
+    persona_channels = {name: {"platform": spec.platform, "address": spec.address} for name, spec in engagement.channels.items()}
+    system = {name: {"platform": cfg.channels[name].platform, "target": cfg.channels[name].target} for name in cfg.channels}
+    if hub:  # the simulator and `pequod reply` follow the run, not the default config
+        hub.set_channels(persona_channels, system)
+    channels = build_channels(cfg.channels, persona_channels, hub, now)
     rules = {name: channel.rules for name, channel in channels.items()}
+    platforms = {name: channel.platform for name, channel in channels.items()}
     graph = KnowledgeGraph.from_engagement(engagement)
     catalog = StrategyCatalog.from_config(cfg.strategies)
 
+    # what the agents that plan and write are told about the channels they can send on: each system
+    # channel's platform and the features of the persona account it reaches (so they pick the right one)
+    chan_lines = ["Channels you can send on (use the channel name as the `channel`); each reaches the persona on one platform:"]
+    for name in channels:
+        features = engagement.channels[cfg.channels[name].target].features
+        extra = " {" + ", ".join(f"{k}: {v}" for k, v in features.items()) + "}" if features else ""
+        chan_lines.append(f"- {name} ({channels[name].platform}){extra}")
     roles = {name: cfg.channels[name].role for name in channels if cfg.channels[name].role}
-    lines = ["Who we write as on each channel:", *(f"- {name}: {text}" for name, text in roles.items())]
-    role = "\n".join(lines) if roles else ""  # added to the prompts like the angle
+    role_lines = ["Who we write as on each channel:", *(f"- {name}: {text}" for name, text in roles.items())] if roles else []
+    role = "\n\n".join(block for block in ("\n".join(chan_lines), "\n".join(role_lines)) if block)
+    angle = angle_block({name: cfg.channels[name].get("angle") for name in channels}, Path(CONFIGS) / "angle")
 
     models = {}
 
     steps = {name: agent.max_steps for name, agent in cfg.agents.items()}
     agents = Agents(
         strategist=Strategist(model("strategist"), graph, steps["strategist"], run.max_paths, role),
-        planner=Planner(model("planner"), graph, catalog, rules, steps["planner"], run.max_waves, angle, role),
-        composer=Composer(model("composer"), graph, catalog, rules, steps["composer"], angle, role),
+        planner=Planner(model("planner"), graph, catalog, rules, platforms, steps["planner"], run.max_waves, angle, role),
+        composer=Composer(model("composer"), graph, catalog, rules, platforms, steps["composer"], angle, role),
         reviewer=Reviewer(model("reviewer"), graph, rules, steps["reviewer"], angle, role),
         updater=Updater(model("updater"), graph, steps["updater"]),
-        resolver=Resolver(model("resolver"), graph, steps["resolver"], angle),
+        resolver=Resolver(model("resolver"), graph, steps["resolver"]),
     )
     trace = Trace(folder, run.register)
     for agent in vars(agents).values():

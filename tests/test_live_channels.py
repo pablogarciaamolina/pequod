@@ -7,7 +7,8 @@ from email.message import EmailMessage
 from email.utils import format_datetime
 
 import pytest
-from conftest import NOW, interaction, load
+from conftest import NOW, interaction, load, personas
+from omegaconf import OmegaConf
 
 from pequod.channels import build_channels
 from pequod.channels.base import ChannelError
@@ -23,7 +24,9 @@ ENV = {
     "TWILIO_ACCOUNT_SID": "ACsid", "TWILIO_AUTH_TOKEN": "twilio-token-456",
     "TWILIO_SMS_FROM": "+15550001111", "TWILIO_WHATSAPP_FROM": "+15550002222",
 }
-ADDRESSES = {"email": CLIENT, "sms": "+34 600 111 222", "whatsapp": "+34 600 111 222"}
+PERSONA = {"work_email": {"platform": "email", "address": CLIENT},
+           "company_sms": {"platform": "sms", "address": "+34 600 111 222"},
+           "personal_whatsapp": {"platform": "whatsapp", "address": "+34 600 111 222"}}
 
 
 def clock():
@@ -44,48 +47,51 @@ def test_live_channels_are_built_with_address_and_credentials(live, monkeypatch)
         "pequod.channels.sms.Client",
         lambda sid, token, http_client: made.append((sid, token, http_client.timeout)) or "client",
     )
-    channels = build_channels(live, ADDRESSES, None, clock, ENV)
-    assert {name: type(c) for name, c in channels.items()} == {"email": EmailLive, "sms": SmsLive, "whatsapp": WhatsAppLive}
-    email = channels["email"]
+    channels = build_channels(live, PERSONA, None, clock, ENV)
+    assert {name: type(c) for name, c in channels.items()} == {"pepe": EmailLive, "stephan": SmsLive, "melina": WhatsAppLive}
+    email = channels["pepe"]
     assert (email.address, email.user, email.password) == (CLIENT, US, PASSWORD)
     assert (email.smtp_host, email.smtp_port, email.imap_host, email.timeout_s) == ("smtp.gmail.com", 465, "imap.gmail.com", 30)
-    assert (channels["sms"].address, channels["sms"].sender) == ("+34600111222", "+15550001111")
-    assert channels["whatsapp"].sender == "+15550002222" and channels["sms"].client == "client"
+    assert (channels["stephan"].address, channels["stephan"].sender) == ("+34600111222", "+15550001111")
+    assert channels["melina"].sender == "+15550002222" and channels["stephan"].client == "client"
     assert made == [("ACsid", "twilio-token-456", 30)] * 2  # a stalled network must not hang the run
-    assert email.rules == ChannelRules.model_validate(dict(live.email.rules))
+    assert email.rules == ChannelRules.model_validate(dict(live.pepe.rules))
 
 
 def test_missing_credentials_are_named(live):
     env = {k: v for k, v in ENV.items() if k != "EMAIL_APP_PASSWORD"}
-    with pytest.raises(ValueError, match="email.*EMAIL_APP_PASSWORD") as e:
-        build_channels(live, {"email": CLIENT}, None, clock, env)
+    with pytest.raises(ValueError, match="pepe.*EMAIL_APP_PASSWORD") as e:
+        build_channels(live, PERSONA, None, clock, env)
     assert US not in str(e.value) and "EMAIL_ADDRESS" not in str(e.value)  # only what is missing, and no values
 
 
-@pytest.mark.parametrize("name, address", [("email", "alex@northwind.example"), ("sms", "+00 000 000"), ("whatsapp", "+00 000 000")])
-def test_placeholder_address_is_rejected_in_live_mode(live, name, address):
+@pytest.mark.parametrize("sysname, pname, address", [("pepe", "work_email", "x@example.com"), ("stephan", "company_sms", "+00 000 000"), ("melina", "personal_whatsapp", "+00 000 000")])
+def test_placeholder_address_is_rejected_in_live_mode(live, sysname, pname, address):
+    config = OmegaConf.create({sysname: live[sysname]})
+    persona = {pname: {"platform": PERSONA[pname]["platform"], "address": address}}
     with pytest.raises(ValueError, match="placeholder"):
-        build_channels(live, {name: address}, None, clock, ENV)
+        build_channels(config, persona, None, clock, ENV)
 
 
 def test_mock_mode_needs_no_credentials(cfg, tmp_path):
     from pequod.channels.mock_hub import MockHub
 
-    channels = build_channels(cfg.channels, {"email": "alex@northwind.example"}, MockHub(tmp_path / "hub.db"), clock, {})
-    assert type(channels["email"]) is EmailMock
+    channels = build_channels(cfg.channels, personas(cfg), MockHub(tmp_path / "hub.db"), clock, {})
+    assert type(channels["pepe"]) is EmailMock
 
 
-def test_only_the_engagement_channels_are_checked(live):
+def test_only_the_given_system_channels_are_built(live):
     env = {"EMAIL_ADDRESS": US, "EMAIL_APP_PASSWORD": PASSWORD}  # no Twilio variables at all
-    assert list(build_channels(live, {"email": CLIENT}, None, clock, env)) == ["email"]
+    config = OmegaConf.create({"pepe": live.pepe})
+    persona = {"work_email": {"platform": "email", "address": CLIENT}}
+    assert list(build_channels(config, persona, None, clock, env)) == ["pepe"]
 
 
 def test_live_test_engagement_is_a_template():
     cfg = load(["engagement=live_test"])
-    assert set(cfg.engagement.channels) == {"email", "sms", "whatsapp"}
+    assert set(cfg.engagement.channels) == {"work_email", "company_sms", "personal_whatsapp"}
     with pytest.raises(ValueError, match="placeholder"):
-        addresses = {name: c.address for name, c in cfg.engagement.channels.items()}
-        build_channels(load(["channels=live"]).channels, addresses, None, clock, ENV)
+        build_channels(load(["channels=live"]).channels, personas(cfg), None, clock, ENV)
 
 
 # ---------- email ----------
@@ -145,7 +151,7 @@ def email(monkeypatch):
     FakeIMAP.mails, FakeIMAP.calls = [], []
     monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
     monkeypatch.setattr(imaplib, "IMAP4_SSL", FakeIMAP)
-    return EmailLive(RULES, CLIENT, US, PASSWORD, "smtp.host.test", 465, "imap.host.test", "A quick question", 30)
+    return EmailLive("email", RULES, CLIENT, US, PASSWORD, "smtp.host.test", 465, "imap.host.test", "A quick question", 30)
 
 
 def mail(sender, at, body, message_id="<r1@customer.test>", html=None):
@@ -283,19 +289,19 @@ SMS_RULES = ChannelRules(max_length=160, subject=False, links_ok=True)
 
 def test_sms_send_calls_twilio():
     client = FakeClient()
-    sid = SmsLive(SMS_RULES, "+34 600 111 222", "+15550001111", client).send(Interaction(**interaction("sms", "Quick one, Alex")))
+    sid = SmsLive("sms", SMS_RULES, "+34 600 111 222", "+15550001111", client).send(Interaction(**interaction("sms", "Quick one, Alex")))
     assert sid == "SM123"
     assert client.messages.created == [{"from_": "+15550001111", "to": "+34600111222", "body": "Quick one, Alex"}]
 
 
 def test_phone_numbers_keep_only_plus_and_digits():
-    channel = SmsLive(SMS_RULES, "+34-600 111.222", "+1 (555) 000-1111", FakeClient())
+    channel = SmsLive("sms", SMS_RULES, "+34-600 111.222", "+1 (555) 000-1111", FakeClient())
     assert (channel.address, channel.sender) == ("+34600111222", "+15550001111")
 
 
 def test_whatsapp_adds_the_prefix_to_both_numbers():
     client = FakeClient()
-    channel = WhatsAppLive(SMS_RULES, "+34 600 111 222", "+15550002222", client)
+    channel = WhatsAppLive("whatsapp", SMS_RULES, "+34 600 111 222", "+15550002222", client)
     channel.send(Interaction(**interaction("whatsapp", "Hi")))
     channel.fetch_replies(NOW)
     assert client.messages.created[0]["from_"] == "whatsapp:+15550002222"
@@ -305,7 +311,7 @@ def test_whatsapp_adds_the_prefix_to_both_numbers():
 
 def test_twilio_payload_link_is_appended_once():
     client = FakeClient()
-    channel = SmsLive(SMS_RULES, "+34600111222", "+15550001111", client)
+    channel = SmsLive("sms", SMS_RULES, "+34600111222", "+15550001111", client)
     link = {"url": "https://cal.example/alex"}
     channel.send(Interaction(**interaction("sms", "Call?"), payload=link))
     channel.send(Interaction(**interaction("sms", "Call? https://cal.example/alex"), payload=link))
@@ -315,7 +321,7 @@ def test_twilio_payload_link_is_appended_once():
 def test_fetch_asks_only_for_the_clients_messages():
     client = FakeClient()
     client.messages.inbox = [Sent("SM2", "second", NOW + timedelta(minutes=9)), Sent("SM1", "first", NOW + timedelta(minutes=2))]
-    replies = SmsLive(SMS_RULES, "+34600111222", "+15550001111", client).fetch_replies(NOW)
+    replies = SmsLive("sms", SMS_RULES, "+34600111222", "+15550001111", client).fetch_replies(NOW)
     assert client.messages.listed == [{"from_": "+34600111222", "to": "+15550001111", "date_sent_after": NOW}]
     assert [(r.id, r.channel, r.body, r.received_at) for r in replies] == [
         ("SM1", "sms", "first", NOW + timedelta(minutes=2)), ("SM2", "sms", "second", NOW + timedelta(minutes=9)),
@@ -325,13 +331,13 @@ def test_fetch_asks_only_for_the_clients_messages():
 def test_twilio_time_without_timezone_is_read_as_utc():
     client = FakeClient()
     client.messages.inbox = [Sent("SM1", "hi", (NOW + timedelta(minutes=2)).replace(tzinfo=None))]
-    assert SmsLive(SMS_RULES, "+34600111222", "+15550001111", client).fetch_replies(NOW)[0].received_at == NOW + timedelta(minutes=2)
+    assert SmsLive("sms", SMS_RULES, "+34600111222", "+15550001111", client).fetch_replies(NOW)[0].received_at == NOW + timedelta(minutes=2)
 
 
 def test_twilio_rejects_another_channels_interaction():
     client = FakeClient()
     with pytest.raises(ValueError, match="email.*sms"):
-        SmsLive(SMS_RULES, "+34600111222", "+15550001111", client).send(Interaction(**interaction("email")))
+        SmsLive("sms", SMS_RULES, "+34600111222", "+15550001111", client).send(Interaction(**interaction("email")))
     assert client.messages.created == []
 
 
@@ -346,7 +352,7 @@ def test_twilio_error_names_the_channel_not_the_token_or_account(action, monkeyp
     uri = "/2010-04-01/Accounts/ACsid/Messages.json"
     client.messages.fail = TwilioRestException(401, uri, "Authenticate", code=20003, method="POST")
     assert "ACsid" in str(client.messages.fail)  # the library's own text holds the account id
-    channel = WhatsAppLive(SMS_RULES, "+34600111222", "+15550002222", client)
+    channel = WhatsAppLive("whatsapp", SMS_RULES, "+34600111222", "+15550002222", client)
     with pytest.raises(ChannelError, match="whatsapp.*401.*20003.*Authenticate") as e:
         channel.send(Interaction(**interaction("whatsapp"))) if action == "send" else channel.fetch_replies(NOW)
     assert all(secret not in str(e.value) for secret in ("twilio-token-456", "ACsid", "\033"))
@@ -393,15 +399,15 @@ def test_a_mail_that_cannot_be_read_is_skipped_not_fatal(email, caplog):
 
 def test_our_own_address_as_the_client_is_rejected(live):
     """A mail we send to ourselves lands in our inbox and would be read as the client's reply."""
-    with pytest.raises(ValueError, match="email.*same"):
-        build_channels(live, {"email": US.upper()}, None, clock, ENV)
-    with pytest.raises(ValueError, match="sms.*same"):
-        build_channels(live, {"sms": "+1 555 000 1111"}, None, clock, ENV)
+    with pytest.raises(ValueError, match="pepe.*same"):
+        build_channels(OmegaConf.create({"pepe": live.pepe}), {"work_email": {"platform": "email", "address": US.upper()}}, None, clock, ENV)
+    with pytest.raises(ValueError, match="stephan.*same"):
+        build_channels(OmegaConf.create({"stephan": live.stephan}), {"company_sms": {"platform": "sms", "address": "+1 555 000 1111"}}, None, clock, ENV)
 
 
 def test_blank_credentials_count_as_missing(live):
     with pytest.raises(ValueError, match="EMAIL_APP_PASSWORD"):
-        build_channels(live, {"email": CLIENT}, None, clock, {**ENV, "EMAIL_APP_PASSWORD": "   "})
+        build_channels(live, PERSONA, None, clock, {**ENV, "EMAIL_APP_PASSWORD": "   "})
 
 
 @pytest.mark.parametrize("address", ["x@example.com", "x@example.org", "someone@host.invalid", "+00-000-000", "+000 000 0000", ""])
@@ -427,7 +433,7 @@ def test_twilio_messages_from_before_the_run_or_without_text_are_dropped():
         Sent("SM2", "not delivered yet", None),
         Sent("SM3", "the real reply", NOW + timedelta(minutes=2)),
     ]
-    replies = SmsLive(SMS_RULES, "+34600111222", "+15550001111", client).fetch_replies(NOW)
+    replies = SmsLive("sms", SMS_RULES, "+34600111222", "+15550001111", client).fetch_replies(NOW)
     assert [r.id for r in replies] == ["SM3"]
 
 

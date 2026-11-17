@@ -1,6 +1,5 @@
 defaults:
   - engagement: julius_muth
-  - angle: curiosity
   - channels: mock
   - strategies: default
   - _self_
@@ -17,17 +16,17 @@ mock_hub: runs/mock_hub.db   # SQLite file shared by the mock channels and `pequ
 
 models:
   # num_ctx: Ollama's default context is too small for the agents' tool outputs
-  ollama_qwen: {provider: ollama, name: "huihui_ai/qwen3.5-abliterated:4b", params: {num_ctx: 8192, temperature: 0}}
+  ollama_qwen: {provider: ollama, name: "huihui_ai/qwen3.5-abliterated:4b", params: {num_ctx: 8192, temperature: 0, reasoning: true}}  # reasoning: keep what the model thinks, for agents.jsonl
   claude: {provider: anthropic, name: claude-sonnet-5-5}
   hf_qwen_local: {provider: huggingface, name: Qwen/Qwen2.5-1.5B-Instruct, params: {local: true, family: qwen, pipeline_kwargs: {max_new_tokens: 512, do_sample: false}}}
 
 agents:
-  strategist: {model: ollama_qwen, max_steps: 4}
-  planner: {model: ollama_qwen, max_steps: 4}
-  composer: {model: ollama_qwen, max_steps: 4}
-  reviewer: {model: ollama_qwen, max_steps: 4}
-  updater: {model: ollama_qwen, max_steps: 8}
-  resolver: {model: ollama_qwen, max_steps: 4}
+  strategist: {model: ollama_qwen, max_steps: 8}
+  planner: {model: ollama_qwen, max_steps: 8}
+  composer: {model: ollama_qwen, max_steps: 12}
+  reviewer: {model: ollama_qwen, max_steps: 8}
+  updater: {model: ollama_qwen, max_steps: 16}
+  resolver: {model: ollama_qwen, max_steps: 8}
 
 hydra:
   run:

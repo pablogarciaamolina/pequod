@@ -29,7 +29,7 @@ def reason(error: Exception) -> str:
 
 
 class SmsMock(MockChannel):
-    name = "sms"
+    platform = "sms"
 
 
 class TwilioChannel(Channel):
@@ -37,16 +37,16 @@ class TwilioChannel(Channel):
 
     prefix = ""
 
-    def __init__(self, rules: ChannelRules, address: str, sender: str, client: Client) -> None:
-        super().__init__(rules)
+    def __init__(self, name: str, rules: ChannelRules, address: str, sender: str, client: Client) -> None:
+        super().__init__(name, rules)
         self.address = number(address)  # the client
         self.sender = number(sender)  # our Twilio number
         self.client = client
 
     @classmethod
-    def from_config(cls, rules: ChannelRules, address: str, settings: dict, secrets: dict[str, str]) -> "TwilioChannel":
+    def from_config(cls, name: str, rules: ChannelRules, address: str, settings: dict, secrets: dict[str, str]) -> "TwilioChannel":
         http = TwilioHttpClient(timeout=settings["timeout_s"])  # give up on a network that does not answer
-        return cls(rules, address, secrets["sender"], Client(secrets["sid"], secrets["token"], http_client=http))
+        return cls(name, rules, address, secrets["sender"], Client(secrets["sid"], secrets["token"], http_client=http))
 
     def send(self, interaction: Interaction) -> str:
         self.accept(interaction)
@@ -76,4 +76,4 @@ class TwilioChannel(Channel):
 
 
 class SmsLive(TwilioChannel):
-    name = "sms"
+    platform = "sms"

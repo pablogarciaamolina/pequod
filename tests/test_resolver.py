@@ -1,5 +1,5 @@
 import pytest
-from conftest import ANGLE, READ, call, fake
+from conftest import READ, call, fake
 
 from pequod.agents.resolver import Resolver
 from pequod.types import Resolution, StopSignal
@@ -11,7 +11,7 @@ REASONS = ["objective_met", "solution_accepted", "opt_out", "max_iterations", "o
 
 def run(graph, reason="objective_met"):
     model = fake(call("Resolution", report="Learned: nightly sync. Recommended reply: enable hourly sync."))
-    return model, Resolver(model, graph, max_steps=4, angle=ANGLE).run(reason, SIGNAL, OBJECTIVE)
+    return model, Resolver(model, graph, max_steps=4).run(reason, SIGNAL, OBJECTIVE)
 
 
 def test_returns_resolution(graph):
@@ -34,7 +34,3 @@ def test_message_has_reason_evidence_and_objective(graph, reason):
 def test_resolution_is_a_report_only():
     assert set(Resolution.model_fields) == {"report"}
 
-
-def test_prompt_ends_with_angle(graph):
-    model, _ = run(graph)
-    assert model.seen[0][0].content.endswith(ANGLE)

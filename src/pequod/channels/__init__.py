@@ -12,9 +12,10 @@ from pequod.channels.sms import SmsLive, SmsMock
 from pequod.channels.whatsapp import WhatsAppLive, WhatsAppMock
 from pequod.types import ChannelRules
 
-MOCKS = {c.name: c for c in (EmailMock, SmsMock, WhatsAppMock)}
-LIVE = {c.name: c for c in (EmailLive, SmsLive, WhatsAppLive)}
-NOT_SETTINGS = ("mode", "role", "credentials", "rules")  # `role` is for the agents' prompts, not for the channel
+MOCKS = {c.platform: c for c in (EmailMock, SmsMock, WhatsAppMock)}
+LIVE = {c.platform: c for c in (EmailLive, SmsLive, WhatsAppLive)}
+# engine/pairing metadata, not constructor arguments of a live channel
+NOT_SETTINGS = ("mode", "role", "angle", "platform", "target", "credentials", "rules")
 
 
 def placeholder(address: str) -> bool:
@@ -32,36 +33,56 @@ def same(address: str) -> str:
 
 def build_channels(
     config: Mapping,
-    addresses: Mapping[str, str],
+    persona_channels: Mapping[str, Mapping[str, str]],
     hub: MockHub | None,
     clock: Callable[[], datetime],
     env: Mapping[str, str] = os.environ,
 ) -> dict[str, Channel]:
-    """One channel object per engagement channel (`addresses`: name -> the persona's address on it),
-    mock or live as the config says. Live channels are checked before any is built: credentials
-    present in `env`, and a real recipient address."""
-    for name, address in addresses.items():
-        if name not in config or name not in MOCKS:
-            raise ValueError(f"Unknown channel '{name}'. Configured: {', '.join(config)}")
-        if config[name].mode == "mock":
+    """One channel object per *system* channel (our accounts, keyed by system-channel name). Each
+    system channel in `config` names a `target` persona channel (from `persona_channels`, mapping
+    persona-channel name -> {platform, address}) and must share its platform; the built channel is
+    addressed to the target. Live channels are checked before any is built: a known platform, an
+    existing target of the same platform, credentials present in `env`, and a real recipient address."""
+    def target_address(name: str, channel: Mapping) -> str:
+        platform = channel.get("platform")
+        registry = MOCKS if channel.mode == "mock" else LIVE
+        if platform not in registry:
+            raise ValueError(f"Unknown channel platform '{platform}' for '{name}'. Known platforms: {', '.join(registry)}")
+        target = channel.get("target")
+        if target not in persona_channels:
+            raise ValueError(
+                f"Channel '{name}' targets persona channel '{target}', which does not exist. "
+                f"Persona channels: {', '.join(persona_channels)}"
+            )
+        if persona_channels[target]["platform"] != platform:
+            raise ValueError(
+                f"Channel '{name}' is {platform} but its target '{target}' is "
+                f"{persona_channels[target]['platform']}; a channel can only reach a target of the same platform."
+            )
+        return persona_channels[target]["address"]
+
+    for name, channel in config.items():
+        address = target_address(name, channel)
+        if channel.mode == "mock":
             continue
-        missing = [variable for variable in config[name].credentials.values() if not env.get(variable, "").strip()]
+        missing = [variable for variable in channel.credentials.values() if not env.get(variable, "").strip()]
         if missing:
             raise ValueError(f"Live {name} needs these variables in .env: {', '.join(missing)}")
         if placeholder(address):
             raise ValueError(f"Live {name}: '{address}' is a placeholder address. Use an engagement with real addresses.")
-        ours = [env[variable] for variable in config[name].credentials.values()]
+        ours = [env[variable] for variable in channel.credentials.values()]
         if same(address) in map(same, ours):  # a message to ourselves would come back as the persona's reply
             raise ValueError(f"Live {name}: the persona's address '{address}' is the same as our own sender address.")
 
     channels = {}
-    for name, address in addresses.items():
-        channel = config[name]
+    for name, channel in config.items():
+        platform = channel.platform
+        address = persona_channels[channel.target]["address"]
         rules = ChannelRules.model_validate(dict(channel.rules))
         if channel.mode == "mock":
-            channels[name] = MOCKS[name](rules, hub, clock)
+            channels[name] = MOCKS[platform](name, rules, hub, clock)
         else:
             settings = {key: value for key, value in channel.items() if key not in NOT_SETTINGS}
             secrets = {key: env[variable] for key, variable in channel.credentials.items()}
-            channels[name] = LIVE[name].from_config(rules, address, settings, secrets)
+            channels[name] = LIVE[platform].from_config(name, rules, address, settings, secrets)
     return channels

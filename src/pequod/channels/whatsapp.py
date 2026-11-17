@@ -5,11 +5,11 @@ from pequod.channels.sms import TwilioChannel
 
 
 class WhatsAppMock(MockChannel):
-    name = "whatsapp"
+    platform = "whatsapp"
 
 
 class WhatsAppLive(TwilioChannel):
     """WhatsApp through Twilio (sandbox or an approved sender)."""
 
-    name = "whatsapp"
+    platform = "whatsapp"
     prefix = "whatsapp:"

@@ -23,7 +23,7 @@ SENT = ("sent:", "date:", "enviado", "fecha:", "gesendet:", "datum:")
 
 
 class EmailMock(MockChannel):
-    name = "email"
+    platform = "email"
 
 
 def unquote(body: str) -> str:
@@ -53,13 +53,13 @@ def unquote(body: str) -> str:
 class EmailLive(Channel):
     """Real email through an SMTP server (send) and an IMAP mailbox (read), e.g. Gmail with an app password."""
 
-    name = "email"
+    platform = "email"
 
     def __init__(
-        self, rules: ChannelRules, address: str, user: str, password: str,
+        self, name: str, rules: ChannelRules, address: str, user: str, password: str,
         smtp_host: str, smtp_port: int, imap_host: str, default_subject: str, timeout_s: float,
     ) -> None:
-        super().__init__(rules)
+        super().__init__(name, rules)
         self.address = address  # the persona
         self.user, self.password = user, password  # our mailbox
         self.smtp_host, self.smtp_port, self.imap_host = smtp_host, smtp_port, imap_host
@@ -67,8 +67,8 @@ class EmailLive(Channel):
         self.timeout_s = timeout_s
 
     @classmethod
-    def from_config(cls, rules: ChannelRules, address: str, settings: dict, secrets: dict[str, str]) -> "EmailLive":
-        return cls(rules, address, **secrets, **settings)
+    def from_config(cls, name: str, rules: ChannelRules, address: str, settings: dict, secrets: dict[str, str]) -> "EmailLive":
+        return cls(name, rules, address, **secrets, **settings)
 
     def send(self, interaction: Interaction) -> str:
         self.accept(interaction)

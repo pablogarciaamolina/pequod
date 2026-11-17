@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from conftest import ANGLE, NOW, Clock, FakeOperator, call, fake, interaction, path, wave
+from conftest import ANGLE, NOW, PLATFORM, Clock, FakeOperator, call, fake, interaction, path, personas, wave
 
 from pequod.agents.base import AgentError
 from pequod.agents.composer import Composer
@@ -19,9 +19,9 @@ CAUSE = "the sync only runs at night"
 
 # one iteration of scripted answers: two paths, first waves on email and whatsapp
 STRATEGIST = call("Paths", paths=[path(), path(subgoal="Ask what they tried")])
-PLANNER = call("Paths", paths=[path(wave("email")), path(wave("whatsapp"), subgoal="Ask what they tried")])
-COMPOSER = [call("Interaction", **interaction("email")), call("Interaction", **interaction("whatsapp"))]
-REVIEWER = call("Review", interactions=[interaction("email"), interaction("whatsapp")], notes="no changes")
+PLANNER = call("Paths", paths=[path(wave("pepe")), path(wave("melina"), subgoal="Ask what they tried")])
+COMPOSER = [call("Interaction", **interaction("pepe")), call("Interaction", **interaction("melina"))]
+REVIEWER = call("Review", interactions=[interaction("pepe"), interaction("melina")], notes="no changes")
 RESOLVER = call("Resolution", report="THE REPORT")
 
 
@@ -37,7 +37,7 @@ class World:
         self.clock = Clock()
         self.hub = MockHub(tmp_path / "hub.db")
         self.operator = FakeOperator(self.clock, operator)
-        channels = build_channels(cfg.channels, dict.fromkeys(rules, "x"), self.hub, self.clock)
+        channels = build_channels(cfg.channels, personas(cfg), self.hub, self.clock)
         self.models = {
             "strategist": fake(*[STRATEGIST] * iterations),
             "planner": fake(*(planner or [PLANNER] * iterations)),
@@ -47,13 +47,14 @@ class World:
             "resolver": fake(RESOLVER),
         }
         m = self.models
+        platforms = {name: PLATFORM[name] for name in rules}
         agents = Agents(
             strategist=Strategist(m["strategist"], graph, 4, 2),
-            planner=Planner(m["planner"], graph, catalog, rules, 4, 3, ANGLE),
-            composer=Composer(m["composer"], graph, catalog, rules, 4, ANGLE),
+            planner=Planner(m["planner"], graph, catalog, rules, platforms, 4, 3, ANGLE),
+            composer=Composer(m["composer"], graph, catalog, rules, platforms, 4, ANGLE),
             reviewer=Reviewer(m["reviewer"], graph, rules, 4, ANGLE),
             updater=Updater(m["updater"], graph, 8),
-            resolver=Resolver(m["resolver"], graph, 4, ANGLE),
+            resolver=Resolver(m["resolver"], graph, 4),
         )
         self.trace = Trace(tmp_path / "run", register)
         scheduler = Scheduler(channels, self.operator, 24, self.clock, on_send=self.trace.sent)
@@ -83,11 +84,11 @@ def world(tmp_path, cfg, graph, catalog, rules):
 
 def test_engaged_branch(world):
     w = world(updater=[signal(objective_met=True, evidence=CAUSE)])
-    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    w.operator.script = [w.reply("melina", CAUSE)]
     state = w.loop.run()
     assert state["reason"] == "objective_met" and state["iteration"] == 1
     assert state["resolution"].report == "THE REPORT"
-    assert [m["channel"] for m in w.hub.sent()] == ["email", "whatsapp"]
+    assert [m["channel"] for m in w.hub.sent()] == ["pepe", "melina"]
     assert "objective_met" in w.said_to("resolver")[0] and CAUSE in w.said_to("resolver")[0]
     assert CAUSE in w.said_to("updater")[0] and "Find the problem" in w.said_to("updater")[0]
 
@@ -125,7 +126,7 @@ def test_stop_before_anything_was_sent_makes_no_updater_call(world):
 
 def test_late_reply_is_processed_once(world):
     w = world(updater=[signal(), signal(), signal()], iterations=3, max_iterations=3)
-    w.operator.script = [None, None, w.reply("sms", "late answer")]  # written during iteration 2's wait
+    w.operator.script = [None, None, w.reply("stephan", "late answer")]  # written during iteration 2's wait
     w.loop.run()
     updates = w.said_to("updater")
     assert len(updates) == 3
@@ -137,12 +138,12 @@ def test_second_composer_gets_the_taken_channel(world):
     w.loop.run()
     first, second = w.said_to("composer")
     assert "already taken by other paths: none" in first
-    assert "already taken by other paths: email" in second
+    assert "already taken by other paths: pepe" in second
 
 
 def test_enter_before_the_send_gives_the_updater_an_empty_sent_list(world):
     w = world(updater=[signal()], max_iterations=1)
-    w.operator.script = [w.reply("sms", "who is this?"), "ok"]  # Enter before the send: everything is dropped
+    w.operator.script = [w.reply("stephan", "who is this?"), "ok"]  # Enter before the send: everything is dropped
     state = w.loop.run()
     assert state["reason"] == "max_iterations" and state["iteration"] == 1 and w.hub.sent() == []
     update = w.said_to("updater")[0]
@@ -180,15 +181,15 @@ def test_more_iterations_than_the_default_graph_limit(world):
 
 def test_engaged_run_leaves_trace_snapshots_and_report(world):
     w = world(updater=[signal(objective_met=True, evidence=CAUSE)])
-    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    w.operator.script = [w.reply("melina", CAUSE)]
     w.loop.run()
     assert w.files() == ["graph_0.json", "graph_1.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
     (record,) = w.trace.records()
     assert (record.wave, record.snapshot, record.reason) == (1, "graph_0.json", "objective_met")
-    assert [i.channel for i in record.interactions] == ["email", "whatsapp"]
+    assert [i.channel for i in record.interactions] == ["pepe", "melina"]
     assert [r.body for r in record.replies] == [CAUSE]
     assert record.stop_signal.objective_met and record.stop_signal.evidence == CAUSE
-    assert len(record.paths) == 2 and "on email" in record.paths[0]
+    assert len(record.paths) == 2 and "on pepe" in record.paths[0]
     report = (w.trace.folder / "report.md").read_text(encoding="utf-8")
     assert report.startswith("Stop reason: objective_met") and "THE REPORT" in report
 
@@ -211,7 +212,7 @@ def test_snapshot_shows_what_the_updater_wrote(world):
 
 def test_late_reply_is_in_the_line_of_the_update_that_absorbed_it(world):
     w = world(updater=[signal(), signal(), signal()], iterations=3, max_iterations=3)
-    w.operator.script = [None, None, w.reply("sms", "late answer")]  # written during wave 2's wait
+    w.operator.script = [None, None, w.reply("stephan", "late answer")]  # written during wave 2's wait
     w.loop.run()
     assert [[r.body for r in record.replies] for record in w.trace.records()] == [[], ["late answer"], []]
 
@@ -263,14 +264,14 @@ def test_waiting_status_lists_the_pending_messages(world):
     w.operator.script = [lambda: seen.append(w.trace.read_status()), "stop"]
     w.loop.run()
     assert seen[0].phase == "waiting" and seen[0].wave == 1
-    assert [p.channel for p in seen[0].pending] == ["email", "whatsapp"]
+    assert [p.channel for p in seen[0].pending] == ["pepe", "melina"]
 
 
 def test_run_registers_every_message_in_full(world):
     w = world(updater=[signal(objective_met=True, evidence=CAUSE)])
-    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    w.operator.script = [w.reply("melina", CAUSE)]
     w.loop.run()
-    assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "email"), ("out", "whatsapp"), ("in", "whatsapp")]
+    assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "pepe"), ("out", "melina"), ("in", "melina")]
     assert w.trace.messages()[-1].body == CAUSE
 
 
@@ -278,10 +279,10 @@ def test_messages_are_registered_even_if_the_updater_fails(world):
     from langchain_core.messages import AIMessage
 
     w = world(updater=[AIMessage("no idea") for _ in range(8)])
-    w.operator.script = [w.reply("sms", "hello?")]
+    w.operator.script = [w.reply("stephan", "hello?")]
     with pytest.raises(AgentError, match="updater"):
         w.loop.run()
-    assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "email"), ("out", "whatsapp"), ("in", "sms")]
+    assert [(m.direction, m.channel) for m in w.trace.messages()] == [("out", "pepe"), ("out", "melina"), ("in", "stephan")]
 
 
 # --- register off (Stage 6) ---
@@ -289,7 +290,7 @@ def test_messages_are_registered_even_if_the_updater_fails(world):
 
 def test_register_off_run_leaves_no_text_in_the_folder(world):
     w = world(updater=[signal(objective_met=True, evidence=CAUSE)], register=False)
-    w.operator.script = [w.reply("whatsapp", CAUSE)]
+    w.operator.script = [w.reply("melina", CAUSE)]
     state = w.loop.run()
     assert state["reason"] == "objective_met" and state["resolution"].report == "THE REPORT"
     assert w.files() == ["status.json"]

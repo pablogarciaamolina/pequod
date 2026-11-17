@@ -4,7 +4,7 @@ import pytest
 from conftest import NOW, interaction, path, wave
 
 from pequod.trace import Trace
-from pequod.types import Interaction, Path, Reply, Resolution, StopSignal, WaveRecord
+from pequod.types import AgentRun, Interaction, Path, Reply, Resolution, StopSignal, WaveRecord
 
 PATHS = [Path(**path(wave("email", "open_door")))]
 SENT = [Interaction(**interaction("email"))]
@@ -24,7 +24,7 @@ def lines(trace):
 def test_snapshot_writes_the_graph(trace, graph):
     assert trace.snapshot(graph, 0) == "graph_0.json"
     data = json.loads((trace.folder / "graph_0.json").read_text(encoding="utf-8"))
-    assert "alex_carter" in [n["id"] for n in data["nodes"]]
+    assert "julius_muth" in [n["id"] for n in data["nodes"]]
 
 
 def test_record_appends_one_json_line_per_wave(trace):
@@ -294,3 +294,20 @@ def test_register_off_fail_keeps_only_the_first_sentence(tmp_path):
 def test_register_on_fail_keeps_the_whole_error(trace):
     trace.fail("planner: no valid Paths. Last message: text")
     assert trace.read_status().error.endswith("Last message: text")
+
+
+# --- what each agent thought and did ---
+
+
+def test_agent_runs_are_registered_in_full(trace):
+    run = AgentRun(agent="planner", messages=[{"type": "ai", "content": "ok", "reasoning": "línea\nuno"}])
+    trace.agent(run)
+    trace.agent(run.model_copy(update={"error": "planner: no valid Paths"}))
+    assert trace.agent_runs() == [run, run.model_copy(update={"error": "planner: no valid Paths"})]
+    assert (trace.folder / "agents.jsonl").read_text(encoding="utf-8").count("\n") == 2
+
+
+def test_register_off_keeps_no_agent_runs(tmp_path):
+    trace = Trace(tmp_path / "run", register=False)
+    trace.agent(AgentRun(agent="planner", messages=[{"type": "ai", "content": "secret"}]))
+    assert not (trace.folder / "agents.jsonl").exists()

@@ -86,11 +86,15 @@ class MockHub:
         rows, _ = self._run("SELECT value FROM meta WHERE key = 'run_folder'")
         return Path(rows[0][0]) if rows else None
 
-    def set_channels(self, addresses: dict[str, str]) -> None:
-        """The channels of the current run (name -> the persona's address), for the simulator and `pequod reply`."""
-        self._run("INSERT OR REPLACE INTO meta (key, value) VALUES ('channels', ?)", (json.dumps(addresses),))
+    def set_channels(self, persona: dict[str, dict], system: dict[str, dict]) -> None:
+        """The two sides of the current run, for the simulator and `pequod reply`:
+        `persona` = persona channel name -> {platform, address}; `system` = system channel name ->
+        {platform, target}. Messages are keyed by the system channel (the thread)."""
+        value = json.dumps({"persona": persona, "system": system})
+        self._run("INSERT OR REPLACE INTO meta (key, value) VALUES ('channels', ?)", (value,))
 
-    def channels(self) -> dict[str, str] | None:
+    def channels(self) -> dict[str, dict] | None:
+        """{'persona': {name: {platform, address}}, 'system': {name: {platform, target}}}, or None."""
         rows, _ = self._run("SELECT value FROM meta WHERE key = 'channels'")
         return json.loads(rows[0][0]) if rows else None
 

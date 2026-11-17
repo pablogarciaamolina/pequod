@@ -7,9 +7,9 @@ AWARE = "2026-11-16T10:00:00+01:00"
 
 
 def test_engagement_validates_default_config(engagement):
-    assert engagement.persona.name == "Alex Carter"
-    assert engagement.persona.features["timezone"] == "Europe/Berlin"
-    assert engagement.channels["sms"].features["hours"] == "12-18"
+    assert engagement.persona.name == "Julius Muth"
+    assert engagement.persona.features["timezone"] == "Europe"
+    assert engagement.channels["company_sms"].features["hours"] == "8-22"
 
 
 def test_engagement_needs_a_channel():

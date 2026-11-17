@@ -8,10 +8,10 @@ from pequod.channels.mock_hub import MockHub
 
 SCRIPT = [
     call("Paths", paths=[path(), path(subgoal="Ask what they tried")]),  # strategist
-    call("Paths", paths=[path(wave("email")), path(wave("whatsapp"), subgoal="Ask what they tried")]),  # planner
-    call("Interaction", **interaction("email")),  # composer, path 1
-    call("Interaction", **interaction("whatsapp")),  # composer, path 2
-    call("Review", interactions=[interaction("email"), interaction("whatsapp")], notes="no changes"),
+    call("Paths", paths=[path(wave("pepe")), path(wave("melina"), subgoal="Ask what they tried")]),  # planner
+    call("Interaction", **interaction("pepe")),  # composer, path 1
+    call("Interaction", **interaction("melina")),  # composer, path 2
+    call("Review", interactions=[interaction("pepe"), interaction("melina")], notes="no changes"),
     call("StopSignal"),  # updater
     call("Resolution", report="THE REPORT"),
 ]
@@ -45,34 +45,58 @@ def test_build_loop_builds_every_agent_with_its_config(models, tmp_path):
     cfg = load(["agents.planner.model=ollama_qwen", "agents.updater.max_steps=6", *others])  # not the config's defaults
     loop = cli.build_loop(cfg, operator(), tmp_path)
     a = loop.agents
-    assert [x.max_steps for x in (a.strategist, a.planner, a.composer, a.reviewer, a.updater, a.resolver)] == [4, 4, 4, 4, 6, 4]
+    assert [x.max_steps for x in (a.strategist, a.planner, a.composer, a.reviewer, a.updater, a.resolver)] == [8, 8, 12, 8, 6, 8]
     assert set(models) == {"claude", "ollama_qwen"}  # one model object per label
     assert a.planner.model is models["ollama_qwen"] and a.composer.model is a.reviewer.model is models["claude"]
     assert a.strategist.max_paths == cfg.run.max_paths and a.planner.max_waves == cfg.run.max_waves
     assert loop.max_iterations == cfg.run.max_iterations and loop.objective == cfg.engagement.objective
-    assert a.composer.system_prompt.endswith(cfg.angle.text)
+    assert "Conversational angle per channel:" in a.composer.system_prompt
 
 
 def test_channel_roles_go_into_the_prompts_of_the_agents_that_plan_and_write(models, tmp_path):
-    cfg = load(["channels.email.role=Sam from Paws and Co", "~engagement.channels.sms", "channels.sms.role=Not used"])
-    a = cli.build_loop(cfg, operator(), tmp_path).agents
+    a = cli.build_loop(load(["channels.pepe.role=Sam from Paws and Co"]), operator(), tmp_path).agents
     names = ("strategist", "planner", "composer", "reviewer", "updater", "resolver")
-    assert [n for n in names if "- email: Sam from Paws and Co" in getattr(a, n).system_prompt] == list(names[:4])
-    assert "Not used" not in a.composer.system_prompt  # only the channels of this engagement
-    assert a.composer.system_prompt.endswith(cfg.angle.text)
+    assert [n for n in names if "- pepe: Sam from Paws and Co" in getattr(a, n).system_prompt] == list(names[:4])
+    assert "Conversational angle per channel:" in a.composer.system_prompt
 
 
-def test_without_roles_the_prompts_are_unchanged(models, tmp_path):
-    from pequod.agents import strategist
-
+def test_the_channel_list_reaches_the_planning_agents_not_the_updater(models, tmp_path):
     a = cli.build_loop(load(), operator(), tmp_path).agents
-    assert a.strategist.system_prompt == strategist.PROMPT
+    assert "Channels you can send on" in a.planner.system_prompt and "Channels you can send on" in a.composer.system_prompt
+    assert "Channels you can send on" not in a.updater.system_prompt and "Channels you can send on" not in a.resolver.system_prompt
 
 
-def test_agents_get_only_the_engagement_channels(models, tmp_path):
-    cfg = load(["~engagement.channels.sms"])
-    loop = cli.build_loop(cfg, operator(), tmp_path)
-    assert set(loop.channels) == set(loop.agents.composer.rules) == set(loop.agents.reviewer.rules) == {"email", "whatsapp"}
+def test_angle_block_lists_each_channels_angle(models, tmp_path):
+    a = cli.build_loop(load(), operator(), tmp_path).agents
+    prompt = a.composer.system_prompt
+    assert "Conversational angle per channel:" in prompt
+    assert "- pepe:" in prompt and "- stephan:" in prompt          # one block, each channel its own angle
+    assert "Conversational angle per channel:" not in a.resolver.system_prompt   # the resolver has no angle
+
+
+def test_a_missing_angle_file_fails_at_startup(models, tmp_path):
+    with pytest.raises(ValueError, match="ghost"):
+        cli.build_loop(load(["channels.pepe.angle=ghost"]), operator(), tmp_path)
+
+
+def test_angle_block_rejects_a_file_without_text(tmp_path):
+    (tmp_path / "empty.yaml").write_text("name: empty\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no 'text'"):
+        cli.angle_block({"email": "empty"}, tmp_path)
+
+
+def test_multi_account_two_system_channels_can_share_one_inbox(models, tmp_path):
+    loop = cli.build_loop(load(["engagement=multi_demo", "channels=mock_multi"]), operator(), tmp_path)
+    platforms = {name: ch.platform for name, ch in loop.channels.items()}
+    assert platforms == {"pepe": "email", "boss": "email", "friend": "email", "melina": "whatsapp"}
+    prompt = loop.agents.composer.system_prompt
+    assert "- pepe:" in prompt and "- friend:" in prompt  # each system channel's own angle
+    assert load(["engagement=multi_demo", "channels=mock_multi"]).run.max_paths <= len(loop.channels)
+
+
+def test_agents_get_only_the_built_system_channels(models, tmp_path):
+    loop = cli.build_loop(load(["~channels.stephan"]), operator(), tmp_path)
+    assert set(loop.channels) == set(loop.agents.composer.rules) == set(loop.agents.reviewer.rules) == {"pepe", "melina"}
 
 
 def test_max_paths_larger_than_channels_raises(models, tmp_path):
@@ -92,7 +116,7 @@ def test_live_run_does_not_touch_the_hub(models, tmp_path, monkeypatch):
     hub = MockHub("runs/mock_hub.db")
     hub.start_run(tmp_path / "mock-run")
     hub.add_reply("sms", "from the mock run", NOW)
-    monkeypatch.setattr(cli, "build_channels", lambda config, addresses, hub, clock: {})
+    monkeypatch.setattr(cli, "build_channels", lambda config, persona, hub, clock: {})
     loop = cli.build_loop(load(["channels=live"]), operator(), tmp_path / "live-run")
     assert hub.run_folder() == tmp_path / "mock-run" and len(hub.replies("sms", NOW)) == 1
     assert loop.channels == {} and cli.open_hub(load(["channels=live"])) is None
@@ -104,10 +128,10 @@ def test_run_end_to_end_with_fakes(models, caplog, tmp_path):
     with caplog.at_level(logging.INFO):
         state = cli.build_loop(cfg, operator(), tmp_path / "run").run()
     assert state["reason"] == "max_iterations" and state["resolution"].report == "THE REPORT"
-    assert [m["channel"] for m in MockHub("runs/mock_hub.db").sent()] == ["email", "whatsapp"]
-    assert "SENT on email" in caplog.text and "THE REPORT" in caplog.text
+    assert [m["channel"] for m in MockHub("runs/mock_hub.db").sent()] == ["pepe", "melina"]
+    assert "SENT on pepe" in caplog.text and "THE REPORT" in caplog.text
     files = sorted(f.name for f in (tmp_path / "run").iterdir())
-    assert files == ["graph_0.json", "graph_1.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
+    assert files == ["agents.jsonl", "graph_0.json", "graph_1.json", "messages.jsonl", "report.md", "status.json", "trace.jsonl"]
 
 
 def test_build_loop_starts_a_clean_run(models, tmp_path):
@@ -206,11 +230,12 @@ def test_a_platform_error_stops_the_run_and_names_the_channel(models, tmp_path, 
 
     class Broken:
         rules = None
+        platform = "email"
 
         def fetch_replies(self, since):
             raise ChannelError("email: could not read replies: OSError: network is unreachable")
 
-    monkeypatch.setattr(cli, "build_channels", lambda config, addresses, hub, clock: {"email": Broken()})
+    monkeypatch.setattr(cli, "build_channels", lambda config, persona, hub, clock: {"pepe": Broken()})
     with caplog.at_level(logging.ERROR):
         assert cli.play(load(), operator(), tmp_path / "run") == 1
     status = Trace(tmp_path / "run").read_status()
@@ -233,12 +258,23 @@ def test_register_off_error_does_not_quote_a_library_message(tmp_path):
     assert cli.brief(plain, register=False) == "planner: no valid Paths after 4 model calls (limit 4)."
 
 
-def test_hub_is_opened_for_the_engagements_channels_only():
-    live_but_sms_mock = load(["channels=live", "channels.sms.mode=mock", "~engagement.channels.sms"])
-    assert cli.open_hub(live_but_sms_mock) is None
-    assert cli.open_hub(load(["channels=live", "channels.sms.mode=mock"])) is not None
+def test_hub_is_opened_only_when_a_system_channel_is_mock():
+    assert cli.open_hub(load(["channels=live"])) is None
+    assert cli.open_hub(load(["channels=live", "channels.stephan.mode=mock"])) is not None
 
 
 def test_build_loop_tells_the_hub_which_channels_the_run_uses(models, tmp_path):
-    cli.build_loop(load(["~engagement.channels.sms"]), operator(), tmp_path / "run")
-    assert MockHub("runs/mock_hub.db").channels() == {"email": "alex@northwind.example", "whatsapp": "+00 000 000"}
+    cli.build_loop(load(["~channels.stephan"]), operator(), tmp_path / "run")
+    ch = MockHub("runs/mock_hub.db").channels()
+    assert set(ch["system"]) == {"pepe", "melina"}
+    assert ch["persona"]["work_email"] == {"platform": "email", "address": "julius.muth@revel8.ai"}
+
+
+def test_a_run_keeps_what_every_agent_thought_and_did(models, tmp_path):
+    loop = cli.build_loop(load(["run.max_iterations=1"]), operator(), tmp_path / "run")
+    loop.run()
+    runs = loop.trace.agent_runs()
+    assert runs[0].agent == "strategist" and runs[-1].agent == "resolver"  # the first update has nothing to absorb
+    assert {r.agent for r in runs} == {"updater", "strategist", "planner", "composer", "reviewer", "resolver"}
+    strategist = next(r for r in runs if r.agent == "strategist")
+    assert strategist.messages[0]["type"] == "system" and strategist.messages[1]["content"].startswith("Objective: ")

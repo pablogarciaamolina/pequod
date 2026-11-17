@@ -1,0 +1,34 @@
+# System channels for the multi-account demo (use with engagement=multi_demo).
+# `pepe` and `boss` both target the persona's work_email -> two nested threads in one inbox.
+pepe:
+  platform: email
+  target: work_email
+  angle: authority
+  mode: mock
+  role: "Pepe Salgado from Valladolid FC. A vendor Revel8 works with."
+  credentials: {user: "pepe.salgado@valladolidfc.com"}
+  rules: {max_length: 2000, subject: true, links_ok: true}
+boss:
+  platform: email
+  target: work_email
+  angle: urgency
+  mode: mock
+  role: "An executive escalating a time-sensitive approval."
+  credentials: {}
+  rules: {max_length: 2000, subject: true, links_ok: true}
+friend:
+  platform: email
+  target: personal_email
+  angle: familiarity
+  mode: mock
+  role: "An old university friend writing from a personal address."
+  credentials: {}
+  rules: {max_length: 2000, subject: true, links_ok: true}
+melina:
+  platform: whatsapp
+  target: phone
+  angle: familiarity
+  mode: mock
+  role: "Melina Garber. From Revel8 (Head of People and Culture). Informal."
+  credentials: {}
+  rules: {max_length: 1000, subject: false, links_ok: true}

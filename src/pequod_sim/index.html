@@ -31,6 +31,9 @@
   .channel.selected { background: var(--in); font-weight: 600; }
   .channel .name { flex: 1; }
   .channel .address { display: block; font-size: 11px; font-weight: 400; color: var(--soft); }
+  .account-head { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--soft); margin: 16px 8px 4px; }
+  .account-head .address { display: block; text-transform: none; letter-spacing: 0; font-size: 11px; }
+  .account .channel { margin-left: 8px; }
   .badge { min-width: 20px; padding: 1px 6px; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
            font-size: 11px; font-weight: 600; text-align: center; }
 
@@ -173,45 +176,55 @@ function changed(part, data) {
   drawn[part] = json;
   return true;
 }
-function channel() { return state.channels.find(c => c.name === selected); }
-function fromEngine(c) { return c.messages.filter(m => m.direction === "out").length; }
+// A thread is one system channel (one sender), nested under the persona account it reaches.
+function threads() { return (state.accounts || []).flatMap(a => a.threads.map(t => ({ ...t, account: a }))); }
+function thread() { return threads().find(t => t.name === selected); }
+function fromEngine(t) { return t.messages.filter(m => m.direction === "out").length; }
 
-function drawChannels() {
-  const rows = state.channels.map(c => [c.name, c.address, Math.max(0, fromEngine(c) - (seen[c.name] || 0)), c.name === selected]);
-  if (!changed("channels", rows)) return;
+function drawSidebar() {
+  const rows = (state.accounts || []).map(a => [a.name, a.platform, a.address,
+    a.threads.map(t => [t.name, Math.max(0, fromEngine(t) - (seen[t.name] || 0)), t.name === selected])]);
+  if (!changed("sidebar", rows)) return;
   const box = document.getElementById("channels");
-  box.replaceChildren(...rows.map(([name, address, unread, isSelected]) => {
-    const button = el("button", "channel" + (isSelected ? " selected" : ""));
-    const label = el("span", "name", NAMES[name] || name);
-    label.append(el("span", "address", address));
-    button.append(label);
-    if (unread) button.append(el("span", "badge", unread));
-    button.onclick = () => {
-      const box = document.getElementById("text");
-      drafts[selected] = box.value;                              // a draft belongs to its channel
-      selected = name;
-      box.value = drafts[name] || "";
-      draw();
-      box.focus();
-    };
-    return button;
+  box.replaceChildren(...rows.map(([aname, platform, address, threadRows]) => {
+    const group = el("div", "account");
+    const head = el("div", "account-head", NAMES[platform] || platform);
+    head.append(el("span", "address", aname + " · " + address));
+    group.append(head);
+    threadRows.forEach(([tname, unread, isSelected]) => {
+      const button = el("button", "channel" + (isSelected ? " selected" : ""));
+      button.append(el("span", "name", tname));
+      if (unread) button.append(el("span", "badge", unread));
+      button.onclick = () => {
+        const field = document.getElementById("text");
+        drafts[selected] = field.value;                          // a draft belongs to its thread
+        selected = tname;
+        field.value = drafts[tname] || "";
+        draw();
+        field.focus();
+      };
+      group.append(button);
+    });
+    return group;
   }));
 }
 
 function drawMessages() {
-  const c = channel();
-  seen[c.name] = fromEngine(c);
-  document.getElementById("title").textContent = NAMES[c.name] || c.name;
-  document.getElementById("address").textContent = c.address;
-  document.getElementById("text").placeholder = "Reply as the persona on " + (NAMES[c.name] || c.name);
-  if (!changed("messages", [c.name, c.messages])) return;
+  const t = thread();
+  const title = document.getElementById("title");
+  if (!t) { title.textContent = ""; document.getElementById("address").textContent = ""; return; }
+  seen[t.name] = fromEngine(t);
+  title.textContent = t.name;
+  document.getElementById("address").textContent = (NAMES[t.platform] || t.platform) + " · " + t.account.name + " (" + t.account.address + ")";
+  document.getElementById("text").placeholder = "Reply as the persona to " + t.name;
+  if (!changed("messages", [t.name, t.messages])) return;
   const box = document.getElementById("messages");
-  box.className = "messages " + c.name;
-  if (!c.messages.length) {
-    box.replaceChildren(el("div", "empty", "No messages on this channel yet. Messages from the engine appear here when they are sent."));
+  box.className = "messages " + t.platform;
+  if (!t.messages.length) {
+    box.replaceChildren(el("div", "empty", "No messages in this thread yet. Messages from the engine appear here when they are sent."));
     return;
   }
-  box.replaceChildren(...c.messages.map(m => c.name === "email" ? mail(m, c) : bubble(m)));
+  box.replaceChildren(...t.messages.map(m => t.platform === "email" ? mail(m, t) : bubble(m)));
   box.scrollTop = box.scrollHeight;
 }
 function bubble(m) {
@@ -221,10 +234,11 @@ function bubble(m) {
   node.append(el("span", "time", time(m.at)));
   return node;
 }
-function mail(m, c) {
+function mail(m, t) {
   const node = el("div", "mail " + m.direction);
   const head = el("div", "head");
-  head.append(el("span", null, m.direction === "out" ? "From: Assistant → " + c.address : "From: " + c.address + " (you)"), el("span", null, time(m.at)));
+  const who = m.direction === "out" ? "From: " + t.name + " → " + t.account.address : "From: " + t.account.address + " (you)";
+  head.append(el("span", null, who), el("span", null, time(m.at)));
   node.append(head);
   if (m.subject) node.append(el("div", "subject", m.subject));
   node.append(document.createTextNode(m.body));
@@ -309,9 +323,9 @@ function draw() {
   if (!state) return;
   const folder = state.run && state.run.folder;
   if (folder !== run) { run = folder; seen = {}; }               // a new run starts with empty inboxes
-  if (!selected || !channel()) selected = state.channels[0].name;
+  if (!selected || !thread()) { const first = threads()[0]; selected = first ? first.name : null; }
   drawMessages();
-  drawChannels();
+  drawSidebar();
   drawStatus();
   drawProgress();
 }
