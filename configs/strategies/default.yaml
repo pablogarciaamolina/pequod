@@ -7,16 +7,16 @@
 # --- Opening: nothing was said yet on this channel ---
 plain_message:   {description: "A plain message with no particular technique. Use when no other strategy fits.", platforms: [email, sms, whatsapp]}
 introduce:       {description: "Say who we are and why we write, in one or two sentences, before any question. Use for the first contact on a channel.", platforms: [email, sms, whatsapp]}
-warm_opener:     {description: "A short friendly opening about something the graph says the persona cares about, without the real question yet. Use when asking at once would feel abrupt.", platforms: [email, whatsapp]}
+warm_opener:     {description: "A short, warm opening about something the graph shows the persona cares about (life outside work, interests, people, pets), with no question yet, just genuine interest. Use to open a thread so a later ask feels natural, not abrupt.", platforms: [email, whatsapp]}
 
 # --- Asking: getting the information or the agreement ---
 direct_ask:       {description: "Ask the one thing we need, plainly, with the reason. Use when the ground is prepared or the question is harmless.", platforms: [email, sms, whatsapp]}
-indirect_ask:     {description: "Ask a broader, related question whose natural answer contains what we need. Use when a direct question would feel intrusive or was dodged.", platforms: [email, sms, whatsapp]}
+indirect_ask:     {description: "Ask a broader, warmer question whose natural answer contains what we need, so it never reads as a probe. Use when a direct question would feel intrusive or was dodged.", platforms: [email, sms, whatsapp]}
 choice_question:  {description: "Offer two to four possible answers and 'something else'. Use when an open question got no answer or the persona writes little.", platforms: [email, sms, whatsapp]}
 yes_no_check:     {description: "Ask one thing that can be answered with yes or no. Use to confirm that something is true before asking about it.", platforms: [email, sms, whatsapp]}
 assumption_check: {description: "State what we believe, from facts in the graph only, and ask the persona to confirm or correct it. Use when we hold a partial answer.", platforms: [email, sms, whatsapp]}
-open_invitation:  {description: "Invite the persona to tell about the topic in their own words, with no specific question. Use early, to collect facts from a persona who likes to write.", platforms: [email, whatsapp]}
-shared_interest:  {description: "Connect the question to something the persona said or cares about, taken from the graph. Use when a reply gave us a hook.", platforms: [email, sms, whatsapp]}
+open_invitation:  {description: "Invite the persona to talk about themselves or something they enjoy in their own words, with no specific question, so personal details surface on their own. Use early with a persona who likes to write.", platforms: [email, whatsapp]}
+shared_interest:  {description: "Warmly pick up something personal the persona said or cares about, from the graph, and let them keep talking about it. Use when a reply gave a hook worth following.", platforms: [email, sms, whatsapp]}
 give_first:       {description: "Give something first, then ask: a payload from this catalog or a fact from the graph, never an invented offer. Use when the persona has no reason yet to answer.", platforms: [email, whatsapp]}
 
 # --- After a reply ---

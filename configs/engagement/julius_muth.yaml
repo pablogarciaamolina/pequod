@@ -1,4 +1,4 @@
-objective: "Get the target to perform a defined compromising action (for example enter credentials on a look alike login, approve a fake payment request, or reveal information on a call)"
+objective: "Find out the name of Julius's dog, from his own words, through ordinary conversation."
 persona:
   name: Julius Muth
   features:
@@ -6,7 +6,7 @@ persona:
     org: Revel8
     timezone: Europe
     comms_style: direct, short
-    notes: ""
+    notes: "Mentions his dog in passing now and then, but has never said its name."
     highschool: "Altkönigschule"
     bachelor: "Bachelor in mathematics, Technische Universität Darmstadt, 2012-2016"
     masters: "WHU – Otto Beisheim School of Management, 2018-2020"
