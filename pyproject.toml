@@ -9,6 +9,7 @@ dependencies = [
     "langchain>=1.0",
     "langgraph",
     "networkx",
+    "pyvis",  # pequod graph: interactive graph window (vis.js) from a networkx graph
     "langchain-anthropic",
     "langchain-ollama",
     "langchain-openai",

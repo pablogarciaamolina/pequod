@@ -87,16 +87,6 @@ def test_only_the_given_system_channels_are_built(live):
     assert list(build_channels(config, persona, None, clock, env)) == ["pepe"]
 
 
-def test_live_test_engagement_is_a_template():
-    cfg = load(["engagement=live_test"])
-    assert set(cfg.engagement.channels) == {"work_email", "company_sms", "personal_whatsapp"}
-    with pytest.raises(ValueError, match="placeholder"):
-        build_channels(load(["channels=live"]).channels, personas(cfg), None, clock, ENV)
-
-
-# ---------- email ----------
-
-
 class FakeSMTP:
     sent, logins, made, fail = [], [], [], None
 

@@ -59,10 +59,10 @@ def test_check_replies_lists_the_last_24_hours(live, capsys):
 
 
 def test_check_passes_overrides(live):
-    assert cli.check(["stephan", "engagement=live_test"]) == 0
-    assert live.seen["persona"]["company_sms"]["address"] == "+00 000 000"  # stephan's target in live_test
-    assert cli.check(["pepe", "replies", "engagement=live_test"]) == 0
-    assert live.seen["persona"]["work_email"]["address"] == "your-test-mailbox@change-me.example"
+    assert cli.check(["stephan", "engagement.channels.company_sms.address=+99 999 999"]) == 0
+    assert live.seen["persona"]["company_sms"]["address"] == "+99 999 999"  # the override reaches the persona map
+    assert cli.check(["pepe", "replies", "engagement.channels.work_email.address=test@change-me.example"]) == 0
+    assert live.seen["persona"]["work_email"]["address"] == "test@change-me.example"
 
 
 @pytest.mark.parametrize("args", [[], ["fax"], ["pepe", "~channels.pepe"]])
@@ -80,11 +80,11 @@ def test_check_with_missing_credentials_or_placeholder_sends_nothing(monkeypatch
         raise AssertionError("a test tried to open a mail connection")
 
     monkeypatch.setattr("smtplib.SMTP_SSL", no_network)
-    assert cli.check(["pepe", "engagement=live_test"]) == 2
+    assert cli.check(["pepe", "engagement.channels.work_email.address=x@example.com"]) == 2
     assert "EMAIL_ADDRESS" in capsys.readouterr().err
     monkeypatch.setenv("EMAIL_ADDRESS", "us@gmail.test")
     monkeypatch.setenv("EMAIL_APP_PASSWORD", "secret-app-password")
-    assert cli.check(["pepe", "engagement=live_test"]) == 2
+    assert cli.check(["pepe", "engagement.channels.work_email.address=x@example.com"]) == 2
     err = capsys.readouterr().err
     assert "placeholder" in err and "secret-app-password" not in err
 

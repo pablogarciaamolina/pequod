@@ -85,15 +85,6 @@ def test_angle_block_rejects_a_file_without_text(tmp_path):
         cli.angle_block({"email": "empty"}, tmp_path)
 
 
-def test_multi_account_two_system_channels_can_share_one_inbox(models, tmp_path):
-    loop = cli.build_loop(load(["engagement=multi_demo", "channels=mock_multi"]), operator(), tmp_path)
-    platforms = {name: ch.platform for name, ch in loop.channels.items()}
-    assert platforms == {"pepe": "email", "boss": "email", "friend": "email", "melina": "whatsapp"}
-    prompt = loop.agents.composer.system_prompt
-    assert "- pepe:" in prompt and "- friend:" in prompt  # each system channel's own angle
-    assert load(["engagement=multi_demo", "channels=mock_multi"]).run.max_paths <= len(loop.channels)
-
-
 def test_agents_get_only_the_built_system_channels(models, tmp_path):
     loop = cli.build_loop(load(["~channels.stephan"]), operator(), tmp_path)
     assert set(loop.channels) == set(loop.agents.composer.rules) == set(loop.agents.reviewer.rules) == {"pepe", "melina"}
