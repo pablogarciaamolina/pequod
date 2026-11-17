@@ -36,6 +36,8 @@ log = logging.getLogger(__name__)
 CONFIGS = str(Path(__file__).parents[2] / "configs")
 USAGE = 'Usage: pequod reply <channel> "text"'
 EXPLAIN_USAGE = "Usage: pequod explain <run folder>   (for example runs/2026-11-14_19-10-00)"
+REPORT_USAGE = "Usage: pequod report <run folder>   (writes a report.html you can open in a browser)"
+GRAPH_USAGE = "Usage: pequod graph <run folder>   (opens the final knowledge graph in an interactive window)"
 CHECK_USAGE = "Usage: pequod check <channel> [replies] [overrides]   (for example: pequod check email engagement=live_test)"
 CHECK_TEXT = "This is a test message from Pequod. You can reply to it."
 
@@ -60,6 +62,44 @@ def reply(args: list[str]) -> int:
         return 2
     hub.add_reply(channel, text, now())
     print(f"Reply stored on {channel} ({hub.path.resolve()}).")
+    return 0
+
+
+def report(args: list[str]) -> int:
+    """Write a self-contained report.html for a run (graph, waves, agent reasoning, report). Exit code."""
+    if len(args) != 1 or not Path(args[0]).is_dir():
+        print(REPORT_USAGE, file=sys.stderr)
+        return 2
+    from pequod.visualizations.report import write_report
+
+    try:
+        out = write_report(args[0])
+    except (FileNotFoundError, ValueError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    print(f"Report written to {out.resolve()}  (open it in a browser)")
+    return 0
+
+
+def graph(args: list[str]) -> int:
+    """Draw the run's final knowledge graph as graph.png (networkx + matplotlib). Returns the exit code."""
+    if len(args) != 1 or not Path(args[0]).is_dir():
+        print(GRAPH_USAGE, file=sys.stderr)
+        return 2
+    try:
+        from pequod.visualizations.graph import render_graph
+
+        out = render_graph(args[0])
+    except ImportError:
+        print("`pequod graph` needs pyvis. Install it with: uv sync", file=sys.stderr)
+        return 2
+    except (FileNotFoundError, ValueError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    import webbrowser
+
+    webbrowser.open(out.resolve().as_uri())  # pops the interactive graph in the default browser
+    print(f"Interactive graph written to {out.resolve()} and opened in your browser (drag nodes, zoom, pan).")
     return 0
 
 
@@ -256,7 +296,7 @@ def main() -> None:
     """Console entry. `pequod reply|explain|check ...` are handled here; the rest goes to Hydra."""
     for stream in (sys.stdout, sys.stderr):  # messages can hold any character; a Windows pipe is not UTF-8
         stream.reconfigure(encoding="utf-8", errors="replace")
-    commands = {"reply": reply, "explain": explain, "check": check}
+    commands = {"reply": reply, "explain": explain, "report": report, "graph": graph, "check": check}
     if sys.argv[1:2] and sys.argv[1] in commands:
         sys.exit(commands[sys.argv[1]](sys.argv[2:]))
     run()
